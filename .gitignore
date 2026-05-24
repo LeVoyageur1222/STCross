@@ -1,0 +1,38 @@
+# 忽略 data 目录下所有层级的特定文件类型
+data/raw_data/*
+data/*.csv
+data/*.parquet
+data/*.pkl
+data/*.pickle
+
+# Python相关
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE相关
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统相关
+.DS_Store
+Thumbs.db
+
+# 日志和临时文件
+*.log
+*.tmp
+*.temp
+
+# Jupyter Notebook
+*.ipynb
+.ipynb_checkpoints/
+
+# 环境和依赖
+.env
+venv/
+.env/
