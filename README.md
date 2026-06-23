@@ -9,6 +9,65 @@
 1. 构建节假日、极端天气等外部事件的结构化表征（掩码机制）
 2. 将外部事件特征与时空客流数据进行交叉融合
 3. 提升模型在异常场景下的客流预测精度
+4. 支持跨城市迁移学习（城市 A 训练 → 城市 B 预测）
+
+## 项目结构
+
+```
+STCross/
+├── README.md                       # 项目说明
+├── requirements.txt                # Python 依赖
+├── exp_log.md                      # 实验日志
+│
+├── data/
+│   ├── raw_data/                   # 原始数据（未纳入版本管理）
+│   │   ├── traffic_flow/           #   交通流量 .pkl（UCTB 格式）
+│   │   ├── weather_his/            #   历史天气 .csv
+│   │   └── weather/                #   天气预报 .parquet
+│   └── processed_data/             # 预处理后数据 .npy
+│       ├── traffic_flow/           #   flow_{city}_{start}_{end}_{freq}min.npy
+│       ├── holiday/                #   mask_{city}_holiday_*.npy / mask_{city}_weekend_*.npy
+│       └── weather/                #   mask_{city}_all_*.npy
+│
+├── data_preprocess/                # 数据预处理与数据集构建
+│   ├── build_flow_data.py          #   客流数据提取与裁剪
+│   ├── build_holiday_mask.py       #   节假日/周末掩码生成
+│   ├── build_weather_mask.py       #   极端天气掩码生成
+│   ├── dataset.py                  #   数据加载、滑动窗口、时间划分、子集筛选
+│   ├── normalizer.py               #   PerNodeStandardScaler 标准化
+│   └── README.md                   #   预处理模块详细文档
+│
+├── model/                          # 模型定义
+│   ├── __init__.py
+│   ├── base.py                     #   BaseModel 抽象基类
+│   └── ha.py                       #   HA (Historical Average) baseline
+│
+├── metrics/                        # 评测指标
+│   ├── __init__.py
+│   └── metrics.py                  #   MAE, RMSE, MAPE, PCC, R²
+│
+├── eval/                           # 评测算法与管线
+│   ├── __init__.py
+│   ├── config.py                   #   EvalConfig 配置数据类
+│   ├── evaluator.py                #   主评测管线（数据加载→模型推理→指标计算）
+│   └── reporter.py                 #   结果打印 + JSON 保存
+│
+├── train/                          # 训练算法（待实现）
+│   └── __init__.py
+│
+├── experiments/                    # 实验入口脚本
+│   ├── run_ha_baseline.py          #   HA baseline 实验
+│   └── run_model.py                #   通用模型评测 CLI
+│
+├── results/                        # 评测结果输出（JSON）
+│
+├── papers/                         # 参考文献与阅读笔记
+│   ├── ST00_note.md                #   综合阅读笔记
+│   └── ST{01-13}_note.md           #   各论文阅读笔记
+│
+└── utils/                          # 通用工具函数（待完善）
+    └── __init__.py
+```
 
 ## 数据基础
 
@@ -60,59 +119,146 @@
 ```
 data/processed_data/
 ├── traffic_flow/
-│   ├── flow_NYC_2014-10-01_2017-09-30_60min.npy    # ~82 MB
-│   └── flow_CHI_2014-10-01_2017-09-30_60min.npy    # ~59 MB
+│   ├── flow_NYC_2014-10-01_2017-09-30_60min.npy    # shape=(26280, 820), int32
+│   └── flow_CHI_2014-10-01_2017-09-30_60min.npy    # shape=(26280, 585), int32
 ├── holiday/
-│   ├── mask_NYC_holiday_2014-10-01_2017-09-30_60min.npy
+│   ├── mask_NYC_holiday_2014-10-01_2017-09-30_60min.npy   # shape=(26280,), int8
 │   ├── mask_NYC_weekend_2014-10-01_2017-09-30_60min.npy
 │   ├── mask_CHI_holiday_2014-10-01_2017-09-30_60min.npy
 │   └── mask_CHI_weekend_2014-10-01_2017-09-30_60min.npy
 └── weather/
-    ├── mask_NYC_all_2014-10-01_2017-09-30_60min.npy
+    ├── mask_NYC_all_2014-10-01_2017-09-30_60min.npy       # shape=(26280,), int8
     └── mask_CHI_all_2014-10-01_2017-09-30_60min.npy
 ```
 
-掩码数据均为 `np.int8` 类型，`1` 表示特殊事件，`0` 表示正常状态。时间步数约 26,280（= 1,095 天 × 24 小时）。
+掩码数据均为 `np.int8` 类型，`1` 表示特殊事件，`0` 表示正常状态。
 
-## 项目结构
+## 评测框架
 
-```
-STCross/
-├── README.md                 # 项目说明
-├── exp_log.md                # 实验日志
-├── data/
-│   ├── raw_data/             # 原始数据（未纳入版本管理）
-│   │   ├── traffic_flow/     #   交通流量 .pkl
-│   │   ├── weather_his/      #   历史天气 .csv
-│   │   └── weather/          #   天气预报 .parquet
-│   └── processed_data/       # 预处理后数据 .npy
-│       ├── traffic_flow/
-│       ├── holiday/
-│       └── weather/
-├── data_preprocess/          # 数据预处理模块
-│   ├── build_flow_data.py    #   客流数据提取与裁剪
-│   ├── build_holiday_mask.py #   节假日/周末掩码生成
-│   ├── build_weather_mask.py #   极端天气掩码生成
-│   └── README.md             #   预处理模块详细文档
-└── utils/                    # 工具函数（待完善）
-```
+### 实验范式
 
-## 数据预处理
+**跨城市迁移预测**：在 source 城市训练模型，在 target 城市评测预测性能。支持同城评测（source=target）和跨城迁移（source≠target）。
 
-### 快速开始
+### 输入输出定义
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `history_len` (H) | 12 | 输入历史步数（12小时） |
+| `predict_len` (P) | 12 | 预测未来步数（12小时） |
+| `split_ratio` | (0.6, 0.2, 0.2) | train:val:test 划分比例 |
+| `anomaly_min_ratio` | 0.5 | 异常标签阈值（见下文） |
+
+- **滑动窗口**：样本 i → X = flow[i:i+H, :]，Y = flow[i+H:i+H+P, :]
+- **数据划分**：按时间顺序切分，划分基于原始时间步 T
+- **标准化**：Per-node StandardScaler，在 train split 上 fit，std=0 节点设 std=1.0
+- 所有指标在**反标准化后的原始尺度**上计算
+
+### 异常定义与标签
+
+**anomaly = holiday OR weather**（weekend 不算异常）
+
+样本级异常标签由 `anomaly_min_ratio` 参数控制：预测窗口 P 步中异常步占比 **超过** 该阈值时，样本标记为异常。
+
+| `anomaly_min_ratio` | 含义 | NYC 异常占比 | CHI 异常占比 |
+|---------------------|------|:------------:|:------------:|
+| 0.0 | 任意一步异常即标记 | 22.8% | 21.8% |
+| 0.25 | >25% 步数异常 | 13.0% | 10.9% |
+| **0.5（默认）** | **多数步数异常** | **6.1%** | **4.0%** |
+| 0.75 | >75% 步数异常 | 2.9% | 1.8% |
+| 1.0 | 全部步数异常 | 1.2% | 0.9% |
+
+默认使用 0.5（多数原则），确保异常子集反映真正的异常时段，符合异常事件稀疏性的研究假设。
+
+### 评测子集
+
+| 子集 | 说明 |
+|------|------|
+| full | 全部测试样本 |
+| anomaly | 仅异常样本 |
+| normal | 仅正常样本 |
+
+### 评测指标
+
+| 指标 | 公式 | 说明 |
+|------|------|------|
+| MAE | mean(\|y - ŷ\|) | 平均绝对误差 |
+| RMSE | sqrt(mean((y - ŷ)²)) | 均方根误差 |
+| MAPE | mean(\|y - ŷ\|/\|y\|) × 100% | 平均绝对百分比误差（仅对 \|y\|>0.5 计算） |
+| PCC | pearsonr(y, ŷ) | 皮尔逊相关系数 |
+| R² | 1 - SS_res/SS_tot | 决定系数 |
+
+> **MAPE 说明**：数据零值占比 66%-77%，MAPE 仅在 |y_true| > 0.5 的样本上计算，排除零值站点。因此 MAPE 仅作参考指标，MAE/RMSE 为主要指标。
+
+### HA Baseline 结果
+
+配置：H=12, P=12, split=6:2:2, anomaly_min_ratio=0.5
+
+| 城市 | 子集 | 样本数 | MAE | RMSE | MAPE% | PCC | R² |
+|------|------|--------|-----|------|-------|-----|-----|
+| NYC | full | 5233 | 1.8926 | 4.2465 | 72.33 | 0.6784 | 0.3903 |
+| NYC | anomaly | 318 | 1.5559 | 3.4676 | 78.50 | 0.6069 | 0.3395 |
+| NYC | normal | 4915 | 1.9144 | 4.2920 | 71.96 | 0.6829 | 0.3918 |
+| CHI | full | 5233 | 0.7379 | 2.2205 | 63.81 | 0.7438 | 0.4557 |
+| CHI | anomaly | 210 | 0.7152 | 2.4251 | 72.41 | 0.5162 | 0.2601 |
+| CHI | normal | 5023 | 0.7388 | 2.2115 | 63.52 | 0.7525 | 0.4628 |
+
+## 快速开始
+
+### 1. 环境准备
 
 ```bash
-# 1. 提取客流数据（支持时间范围裁剪）
+pip install -r requirements.txt
+```
+
+### 2. 数据预处理（如需重新生成）
+
+```bash
+# 提取客流数据（支持时间范围裁剪）
 python data_preprocess/build_flow_data.py
 
-# 2. 生成节假日与周末掩码
+# 生成节假日与周末掩码
 python data_preprocess/build_holiday_mask.py
 
-# 3. 生成极端天气掩码
+# 生成极端天气掩码
 python data_preprocess/build_weather_mask.py
 ```
 
-### 极端天气类型
+### 3. 运行 HA Baseline
+
+```bash
+# 默认配置：H=12, P=12, split=6:2:2, anomaly_min_ratio=0.5
+python experiments/run_ha_baseline.py
+```
+
+### 4. 通用模型评测
+
+```bash
+python experiments/run_model.py \
+    --model HA \
+    --source NYC \
+    --target NYC \
+    --history_len 12 \
+    --predict_len 12 \
+    --split 0.6 0.2 0.2 \
+    --anomaly_min_ratio 0.5 \
+    --output_dir results/
+```
+
+### 5. 查看结果
+
+评测结果保存为 JSON 文件到 `results/` 目录，命名格式为 `{model}_{source}_to_{target}_{timestamp}.json`。
+
+## 添加新模型
+
+1. 在 `model/` 目录下创建模型文件，继承 `model.base.BaseModel`
+2. 实现三个接口：
+   - `fit(train_X, train_Y, val_X, val_Y)` — 训练
+   - `predict(X) → np.ndarray` — 推理，返回 shape=(num_samples, P, N)
+   - `name` 属性 — 模型名称
+3. 在 `experiments/run_model.py` 的 `MODEL_REGISTRY` 和 `build_model()` 中注册
+4. 运行：`python experiments/run_model.py --model <name> --target NYC`
+
+## 极端天气类型
 
 | 类型 | 标识 | 判断条件 |
 | :--- | :--- | :--- |
@@ -131,6 +277,7 @@ python data_preprocess/build_weather_mask.py
 ```
 numpy>=1.21.0
 pandas>=1.3.0
+scipy>=1.7.0
 tqdm>=4.60.0
 ```
 
@@ -138,5 +285,7 @@ tqdm>=4.60.0
 
 - [x] 数据预处理流水线（客流提取 + 节假日掩码 + 天气掩码）
 - [x] NYC、CHI 两城市数据预处理完成（2014-10-01 ~ 2017-09-30, 60min）
+- [x] 统一评测框架（滑动窗口 + 跨城市迁移 + 异常子集 + 五项指标）
+- [x] HA baseline 评测完成
 - [ ] 模型设计与实现
-- [ ] 实验评估
+- [ ] 跨城市迁移实验

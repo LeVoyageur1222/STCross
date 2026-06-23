@@ -18,6 +18,7 @@ __pycache__/
 *.swp
 *.swo
 *~
+.claude/
 
 # 操作系统相关
 .DS_Store

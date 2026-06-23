@@ -1,0 +1,36 @@
+{
+  "model": "HA",
+  "source_city": "NYC",
+  "target_city": "NYC",
+  "history_len": 12,
+  "predict_len": 12,
+  "split_ratio": [
+    0.6,
+    0.2,
+    0.2
+  ],
+  "num_test_samples": 5233,
+  "subsets": {
+    "full": {
+      "count": 5233,
+      "MAE": 1.8926,
+      "RMSE": 4.2465,
+      "PCC": 0.6784,
+      "R2": 0.3903
+    },
+    "anomaly": {
+      "count": 1192,
+      "MAE": 1.6842,
+      "RMSE": 3.7674,
+      "PCC": 0.6475,
+      "R2": 0.3854
+    },
+    "normal": {
+      "count": 4041,
+      "MAE": 1.9541,
+      "RMSE": 4.3778,
+      "PCC": 0.6883,
+      "R2": 0.3905
+    }
+  }
+}
