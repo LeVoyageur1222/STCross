@@ -190,16 +190,25 @@
 
 > **跨城市迁移**：图卷积核权重 (K, C_in, C_out) 与 N 无关，跨城市时 registry 自动加载 target 城市邻接矩阵。
 
-### 2.2 DCRNN
+### 2.2 DCRNN ✅ 代码就绪，待用户运行
 
-> 文件：`model/dcrnn.py` | 实现方式：适配开源
-> 代码源：https://github.com/liyaguang/DCRNN
+> 文件：`model/dcrnn.py` | 实现方式：基于 liyaguang/DCRNN (TF) + chnsh/DCRNN_PyTorch 忠实复现
 
-- [ ] DiffusionConvGRU + Seq2Seq
-- [ ] 继承 `TorchModel`，`input_mode="all_nodes"`
-- [ ] 注册到 `model/registry.py`
-- [ ] **用户运行**：`python experiments/run_all.py --models DCRNN --settings all`
+- [x] 核心模块（忠实还原原始架构）：
+  - `build_supports()`: 从邻接矩阵计算 dual random walk 支撑矩阵 (forward + backward, K-hop powers)，共 2×(K+1) 个
+  - `DiffusionConv`: Σ_k θ_k · P^k · X，所有支撑矩阵拼接后线性变换
+  - `DCGRUCell`: GRU 三个门 (reset, update, candidate) 全部用 DiffusionConv 替代线性变换
+  - `DCRNNEncoder`: L 层 DCGRU 堆叠，逐步处理 T 个时间步
+  - `DCRNNDecoder`: L 层 DCGRU + Linear projection，自回归生成 P 步预测
+  - 默认配置：hidden_dim=64, num_layers=2, K=2 (6 个支撑矩阵), 445K 参数
+- [x] 继承 `TorchModel`，`input_mode="all_nodes"`
+- [x] 注册到 `model/registry.py`，自动加载 target 城市邻接矩阵
+- [x] Smoke test 通过（合成数据 MPS，forward+backward 正确）
+- [ ] **用户运行**：`python experiments/run_all.py --models DCRNN --settings all --epochs 100 --batch_size 32 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
+
+> **性能说明**：DCRNN 是 Seq2Seq 架构（24 个顺序 RNN 步），MPS 单 batch (B=16, N=585) ~9s。预计单次训练 ~4-8 小时 (MPS)，建议用 GPU 服务器或减少 epochs。
+> **跨城市迁移**：扩散卷积权重 (num_supports × C_in, C_out) 与 N 无关，支撑矩阵在 registry 中自动为 target 城市重建。
 
 ### 2.3 GWNET
 

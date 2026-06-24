@@ -141,12 +141,18 @@ python experiments/run_all.py --models STGCN --settings all \
 > 默认 blocks=[[1,16,64],[64,16,64]], Ks=3, Kt=3
 > 邻接矩阵自动从 `data/processed_data/adjacency/` 加载（跨城市时加载 target 城市的）。
 
-### DCRNN
+### DCRNN ✅ 已就绪
 
 ```bash
 python experiments/run_all.py --models DCRNN --settings all \
     --epochs 100 --batch_size 32 --lr 1e-3
 ```
+
+> **注意**：DCRNN 是 Seq2Seq 架构（encoder 12 步 + decoder 12 步 = 24 个顺序 RNN 步），训练最慢。
+> MPS 预计单次训练 ~4-8 小时，建议用 GPU 服务器或降低 epochs（如 50）。
+> 模型结构：DCRNNEncoder(2 层 DCGRU) → 复制隐状态 → DCRNNDecoder(2 层 DCGRU, 自回归)
+> 默认 hidden_dim=64, K=2 (双向随机游走, 6 个支撑矩阵), num_layers=2
+> 邻接矩阵自动从 `data/processed_data/adjacency/` 加载。
 
 ### GWNET
 

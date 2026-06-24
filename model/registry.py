@@ -73,3 +73,16 @@ def build_stgcn(config: EvalConfig, train_config: TrainConfig):
         H=config.history_len, P=config.predict_len,
         train_config=train_config,
     )
+
+
+@register("DCRNN")
+def build_dcrnn(config: EvalConfig, train_config: TrainConfig):
+    import numpy as np
+    from model.dcrnn import DCRNNModel
+    adj = np.load(config.adj_path(config.target_city))
+    N = adj.shape[0]
+    return DCRNNModel(
+        N=N, adj=adj,
+        H=config.history_len, P=config.predict_len,
+        train_config=train_config,
+    )

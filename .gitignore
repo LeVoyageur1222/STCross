@@ -5,6 +5,18 @@ data/*.parquet
 data/*.pkl
 data/*.pickle
 
+# 处理后数据（大文件）
+data/processed_data/traffic_flow/*.npy
+data/processed_data/adjacency/*.npy
+data/processed_data/holiday/*.npy
+data/processed_data/weather/*.npy
+
+# 模型 checkpoint（训练产出，大文件）
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
 # Python相关
 __pycache__/
 *.pyc
