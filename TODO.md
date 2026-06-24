@@ -104,24 +104,26 @@
 - [x] 评测：NYC→NYC, CHI→CHI（跨城市与同城相同，HA 无迁移概念）
 - [x] 结果已录入 `results/RESULTS.md`
 
-### 1.1 LSTM
+### 1.1 LSTM ✅ 代码就绪，待用户运行
 
 > 文件：`model/lstm.py` | 实现方式：自主实现
 
-- [ ] 网络结构：2 层 LSTM (hidden=64) → Linear(64, P)
-- [ ] 继承 `TorchModel`，`input_mode="per_node"`
-- [ ] 注册到 `model/registry.py`
-- [ ] **用户运行**：`python experiments/run_all.py --models LSTM --settings all`
+- [x] 网络结构：2 层 LSTM (hidden=64, dropout=0.1) → Linear(64, P) → (B, P, 1)
+- [x] 继承 `TorchModel`，`input_mode="per_node"`
+- [x] 注册到 `model/registry.py`
+- [x] Smoke test 通过（CHI 3 epochs）
+- [ ] **用户运行**：`python experiments/run_all.py --models LSTM --settings all --epochs 100 --batch_size 64 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
 
-### 1.2 DLinear
+### 1.2 DLinear ✅ 代码就绪，待用户运行
 
 > 文件：`model/dlinear.py` | 实现方式：自主实现
 
-- [ ] 网络结构：移动平均分解 trend + seasonal → 两个 Linear(H, P) → 相加
-- [ ] 继承 `TorchModel`，`input_mode="per_node"`
-- [ ] 注册到 `model/registry.py`
-- [ ] **用户运行**：`python experiments/run_all.py --models DLinear --settings all`
+- [x] 网络结构：MovingAvg 分解 trend + seasonal → 两个 Linear(H, P) → 相加 → (B, P, 1)
+- [x] 继承 `TorchModel`，`input_mode="per_node"`
+- [x] 注册到 `model/registry.py`
+- [x] Smoke test 通过（CHI 3 epochs）
+- [ ] **用户运行**：`python experiments/run_all.py --models DLinear --settings all --epochs 100 --batch_size 64 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
 
 ### 1.3 PatchTST

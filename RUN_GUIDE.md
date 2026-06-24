@@ -82,19 +82,27 @@ python experiments/run_all.py --models HA --settings all
 
 > HA 无需训练，跨城市结果与同城相同（始终使用 target 训练集）。
 
-### LSTM
+### LSTM ✅ 已就绪
 
 ```bash
 python experiments/run_all.py --models LSTM --settings all \
     --epochs 100 --batch_size 64 --lr 1e-3
 ```
 
-### DLinear
+> 预计 MPS 单次训练 ~5-10 min，4 设置合计 ~20-40 min。
+> 模型结构：2 层 LSTM (hidden=64, dropout=0.1) → Linear → (B, P, 1)
+> checkpoint 保存在 `checkpoints/LSTM_best.pt`，每次新设置会覆盖。
+
+### DLinear ✅ 已就绪
 
 ```bash
 python experiments/run_all.py --models DLinear --settings all \
     --epochs 100 --batch_size 64 --lr 1e-3
 ```
+
+> 预计 MPS 单次训练 ~3-5 min，4 设置合计 ~12-20 min。
+> 模型结构：MovingAvg(kernel=3) 分解 trend/seasonal → 两个 Linear(H, P) → 相加
+> 参数量极少（仅 2×H×P = 288 参数），训练最快的 baseline。
 
 ### PatchTST
 

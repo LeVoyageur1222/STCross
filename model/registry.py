@@ -4,6 +4,7 @@ from eval.config import EvalConfig
 from train.trainer import TrainConfig
 from model.ha import HAModel
 
+
 MODEL_REGISTRY = {}
 
 
@@ -22,4 +23,22 @@ def build_ha(config: EvalConfig, train_config: TrainConfig):
         start_date=config.start_date,
         freq_min=config.freq_min,
         train_steps=config.train_steps,
+    )
+
+
+@register("LSTM")
+def build_lstm(config: EvalConfig, train_config: TrainConfig):
+    from model.lstm import LSTMModel
+    return LSTMModel(
+        H=config.history_len, P=config.predict_len,
+        train_config=train_config,
+    )
+
+
+@register("DLinear")
+def build_dlinear(config: EvalConfig, train_config: TrainConfig):
+    from model.dlinear import DLinearModel
+    return DLinearModel(
+        H=config.history_len, P=config.predict_len,
+        train_config=train_config,
     )
