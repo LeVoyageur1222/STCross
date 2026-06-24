@@ -126,14 +126,15 @@
 - [ ] **用户运行**：`python experiments/run_all.py --models DLinear --settings all --epochs 100 --batch_size 64 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
 
-### 1.3 PatchTST
+### 1.3 PatchTST ✅ 代码就绪，待用户运行
 
-> 文件：`model/patchtst.py` | 实现方式：适配开源
-> 代码源：https://github.com/yuqinie98/PatchTST
+> 文件：`model/patchtst.py` | 实现方式：自主实现（参考原论文架构）
 
-- [ ] 提取核心模块，适配为 `TorchModel`，`input_mode="per_node"`
-- [ ] 注册到 `model/registry.py`
-- [ ] **用户运行**：`python experiments/run_all.py --models PatchTST --settings all`
+- [x] 网络结构：PatchEmbedding(patch_len=4, stride=2) → PositionalEncoding → TransformerEncoder(d_model=64, n_heads=4, n_layers=2, d_ff=128) → Linear → (B, P, 1)
+- [x] 继承 `TorchModel`，`input_mode="per_node"`
+- [x] 注册到 `model/registry.py`
+- [x] Smoke test 通过（CHI 3 epochs）
+- [ ] **用户运行**：`python experiments/run_all.py --models PatchTST --settings all --epochs 100 --batch_size 64 --lr 1e-4`
 - [ ] 结果收集 → 更新 RESULTS.md
 
 ### 1.4 TimesNet
@@ -219,17 +220,33 @@
 - [ ] **用户运行**：同城 + 跨城市 4 设置
 - [ ] 结果收集 → 更新 RESULTS.md
 
-### 3.2 ConFormer (ST11) — 待代码开源
+### 3.2 ConFormer (ST11)
 
-- [ ] 跟踪开源状态
-- [ ] 若开源：适配 + 评测
-- [ ] 若未开源：标记为无法复现
+> 代码源：https://github.com/Dreamzz5/ConFormer ✅ 已确认对应
+> 论文：*Towards Resilient Transportation: A Conditional Transformer for Accident-Informed Traffic Forecasting* (KDD 2026)
 
-### 3.3 STEVE (ST13) — 待代码开源
+- [x] 代码仓库核对：README 确认为 Conditional Transformer + Guided Layer Normalization (GLN)，KDD 2026
+- [x] 跨城市适配性评估：**存在 N-dependent 参数**
+  - Node Embedding `(N, d)`、Adaptive Adjacency `(N, 10)×(10, N)`、precomputed adj `(N, N)`、output reshape 硬编码 `num_nodes`
+  - 同城评测可直接使用，跨城市需去除或重初始化 node embedding + 替换 adj
+- [ ] 数据格式适配：原始格式为 `data.npz (T, N, C)` + `adj.npy`，需转换我们的 `(T, N)` flow + corr adj
+- [ ] 适配到框架 + 注册
+- [ ] **用户运行**：同城 + 跨城市 4 设置
+- [ ] 结果收集 → 更新 RESULTS.md
 
-- [ ] 跟踪开源状态
-- [ ] 若开源：适配 + 评测
-- [ ] 若未开源：标记为无法复现
+### 3.3 STEVE (ST13)
+
+> 代码源：https://github.com/bigscity/STEVE_CODE ✅ 已确认对应
+> 论文：*Seeing the Unseen: Learning Basis Confounder Representations for Robust Traffic Prediction* (KDD 2025)
+
+- [x] 代码仓库核对：README 确认为 STEVE (Spatial-Temporal sElf-superVised confoundEr learning)，KDD 2025
+- [x] 跨城市适配性评估：**存在 N-dependent 参数**
+  - GNN backbone、node embeddings、graph-tied basis confounder bank、spatial self-supervised task
+  - 同城评测可直接使用，跨城市需解耦 confounder learning 与 city-specific spatial 组件
+- [ ] 数据格式适配：原始格式为 HDF5 + adjacency pickle（LibCity 生态），需转换
+- [ ] 适配到框架 + 注册
+- [ ] **用户运行**：同城 + 跨城市 4 设置
+- [ ] 结果收集 → 更新 RESULTS.md
 
 ---
 

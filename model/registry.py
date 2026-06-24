@@ -42,3 +42,12 @@ def build_dlinear(config: EvalConfig, train_config: TrainConfig):
         H=config.history_len, P=config.predict_len,
         train_config=train_config,
     )
+
+
+@register("PatchTST")
+def build_patchtst(config: EvalConfig, train_config: TrainConfig):
+    from model.patchtst import PatchTSTModel
+    return PatchTSTModel(
+        H=config.history_len, P=config.predict_len,
+        train_config=train_config,
+    )

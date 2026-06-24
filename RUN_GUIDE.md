@@ -104,12 +104,17 @@ python experiments/run_all.py --models DLinear --settings all \
 > 模型结构：MovingAvg(kernel=3) 分解 trend/seasonal → 两个 Linear(H, P) → 相加
 > 参数量极少（仅 2×H×P = 288 参数），训练最快的 baseline。
 
-### PatchTST
+### PatchTST ✅ 已就绪
 
 ```bash
 python experiments/run_all.py --models PatchTST --settings all \
     --epochs 100 --batch_size 64 --lr 1e-4
 ```
+
+> **注意**：PatchTST 使用较小学习率 `1e-4`（Transformer 对大 lr 敏感）。
+> 预计 MPS 单次训练 ~10-20 min，4 设置合计 ~40-80 min。
+> 模型结构：PatchEmbedding(patch=4, stride=2) → TransformerEncoder(d=64, heads=4, layers=2) → Linear
+> H=12 产生 (12-4)/2+1=5 个 patch。
 
 ### TimesNet
 
