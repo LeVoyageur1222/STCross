@@ -116,12 +116,18 @@ python experiments/run_all.py --models PatchTST --settings all \
 > 模型结构：PatchEmbedding(patch=4, stride=2) → TransformerEncoder(d=64, heads=4, layers=2) → Linear
 > H=12 产生 (12-4)/2+1=5 个 patch。
 
-### TimesNet
+### TimesNet ✅ 已就绪
 
 ```bash
 python experiments/run_all.py --models TimesNet --settings all \
-    --epochs 100 --batch_size 64 --lr 1e-3
+    --epochs 100 --batch_size 16 --lr 1e-3
 ```
+
+> **重要**：TimesNet 因 PyTorch MPS backward bug 自动回退至 **CPU** 训练（有 CUDA 时自动使用 GPU）。
+> CPU 训练较慢，预计单次 ~60-120 min，4 设置合计 ~4-8 小时。
+> 建议优先跑 LSTM/DLinear/PatchTST，TimesNet 放到最后或用 GPU 服务器跑。
+> 模型结构（忠实 TSLib 原版）：TokenEmbedding(Conv1d k=3) → predict_linear(H→H+P) → TimesBlock×2(FFT+2D Inception×6) → RevIN
+> 超参：d_model=32, d_ff=32, top_k=3, num_kernels=6, n_layers=2
 
 ### STGCN
 

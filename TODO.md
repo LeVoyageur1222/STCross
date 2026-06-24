@@ -137,15 +137,24 @@
 - [ ] **用户运行**：`python experiments/run_all.py --models PatchTST --settings all --epochs 100 --batch_size 64 --lr 1e-4`
 - [ ] 结果收集 → 更新 RESULTS.md
 
-### 1.4 TimesNet
+### 1.4 TimesNet ✅ 代码就绪，待用户运行
 
-> 文件：`model/timesnet.py` | 实现方式：适配开源
-> 代码源：https://github.com/thuml/TimesNet
+> 文件：`model/timesnet.py` | 实现方式：基于 TSLib 官方代码忠实复现
 
-- [ ] 提取 TimesBlock，适配为 `TorchModel`，`input_mode="per_node"`
-- [ ] 注册到 `model/registry.py`
-- [ ] **用户运行**：`python experiments/run_all.py --models TimesNet --settings all`
+- [x] 网络结构（忠实还原 TSLib 原版）：
+  - TokenEmbedding (Conv1d k=3, circular padding, Kaiming init)
+  - predict_linear: Linear(H, H+P) 在 feature 空间扩展时间维
+  - TimesBlock × 2: FFT batch-level 周期检测 → 2D reshape → dual InceptionBlockV1 (6 kernels {1,3,5,7,9,11}, mean aggregation, Kaiming init) → reshape back + per-sample softmax 加权聚合 + residual
+  - LayerNorm after each block
+  - projection: Linear(d_model, 1) per timestep → 取最后 P 步
+  - RevIN instance normalization (subtract mean/std → reverse after prediction)
+- [x] 继承 `TorchModel`，`input_mode="per_node"`
+- [x] 注册到 `model/registry.py`
+- [x] Smoke test 通过（CPU，合成数据 50 节点 2 epochs）
+- [ ] **用户运行**：`python experiments/run_all.py --models TimesNet --settings all --epochs 100 --batch_size 16 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
+
+> **注意**：TimesNet 因 PyTorch MPS 后端的 backward bug（多分支 Conv2d+view+residual 模式），自动回退至 CPU 训练。有 CUDA GPU 时会自动使用 GPU。CPU 训练较慢，预计单次训练 ~60-120 min。
 
 ---
 
