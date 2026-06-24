@@ -8,28 +8,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from eval.config import EvalConfig
 from eval.evaluator import Evaluator
 from eval.reporter import Reporter
-from model.ha import HAModel
+from model.registry import MODEL_REGISTRY
+from train.trainer import TrainConfig
 
 
 def main():
-    experiments = [
-        {"target_city": "NYC"},
-        {"target_city": "CHI"},
-    ]
-
-    for exp in experiments:
-        city = exp["target_city"]
+    train_config = TrainConfig()
+    for city in ["NYC", "CHI"]:
         config = EvalConfig(source_city=city, target_city=city)
-
-        model = HAModel(
-            target_city=city,
-            flow_path=config.flow_path(city),
-            start_date=config.start_date,
-            freq_min=config.freq_min,
-            split_ratio=config.split_ratio,
-        )
+        model = MODEL_REGISTRY["HA"](config, train_config)
         evaluator = Evaluator(config)
-
         results = evaluator.run(model)
         Reporter.print_results(results)
         Reporter.save_results(results, "results/")

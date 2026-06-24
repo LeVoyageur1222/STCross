@@ -16,10 +16,8 @@ def load_anomaly_mask(city: str, mask_dir_holiday: str, mask_dir_weather: str,
     return holiday | weather
 
 
-def split_data(T: int, split_ratio: Tuple[float, float, float]) -> Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]]:
-    t_train = int(T * split_ratio[0])
-    t_val = int(T * (split_ratio[0] + split_ratio[1]))
-    return (0, t_train), (t_train, t_val), (t_val, T)
+def split_data(T: int, train_steps: int, val_steps: int) -> Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]]:
+    return (0, train_steps), (train_steps, train_steps + val_steps), (train_steps + val_steps, T)
 
 
 def create_sliding_windows(
@@ -52,7 +50,7 @@ def create_sliding_windows(
         X[idx] = flow[i: i + H]
         Y[idx] = flow[i + H: i + H + P]
         ratio = mask[i + H: i + H + P].mean()
-        sample_labels[idx] = ratio > anomaly_min_ratio
+        sample_labels[idx] = ratio >= anomaly_min_ratio
 
     return X, Y, sample_labels
 

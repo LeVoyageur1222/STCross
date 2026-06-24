@@ -8,12 +8,12 @@ class HAModel(BaseModel):
     """Historical Average: per-(hour_of_day, day_of_week, node) mean from training data."""
 
     def __init__(self, target_city: str, flow_path: str, start_date: str,
-                 freq_min: int, split_ratio: tuple):
+                 freq_min: int, train_steps: int):
         self.target_city = target_city
         self.flow_path = flow_path
         self.start_date = start_date
         self.freq_min = freq_min
-        self.split_ratio = split_ratio
+        self.train_steps = train_steps
         self.lookup = None  # (24, 7, N)
 
     @property
@@ -24,7 +24,7 @@ class HAModel(BaseModel):
             val_X: np.ndarray, val_Y: np.ndarray) -> None:
         flow = np.load(self.flow_path)
         T = flow.shape[0]
-        train_end = int(T * self.split_ratio[0])
+        train_end = self.train_steps
         train_flow = flow[:train_end]
 
         start = pd.Timestamp(self.start_date)

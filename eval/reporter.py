@@ -13,7 +13,7 @@ class Reporter:
         print(f"\n{'=' * 70}")
         print(f"  {model} | {source} -> {target} | "
               f"H={results['history_len']} P={results['predict_len']} | "
-              f"split={results['split_ratio']} | "
+              f"split={results['train_steps']}/{results['val_steps']}/{results['test_steps']} | "
               f"anomaly_min_ratio={results['anomaly_min_ratio']}")
         print(f"  Test samples: {results['num_test_samples']}")
         print(f"{'=' * 70}")

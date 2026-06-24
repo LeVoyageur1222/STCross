@@ -14,7 +14,12 @@ class EvalConfig:
     history_len: int = 12
     predict_len: int = 12
 
-    split_ratio: Tuple[float, float, float] = (0.6, 0.2, 0.2)
+    # Month-aligned split: train/val step counts.
+    # Train: 2014-10-01 ~ 2016-06-30 (15336 steps)
+    # Val:   2016-07-01 ~ 2017-01-31 (5160 steps)
+    # Test:  2017-02-01 ~ 2017-09-29 (5784 steps = T - train - val)
+    train_steps: int = 15336
+    val_steps: int = 5160
 
     # Minimum fraction of anomalous steps in prediction window to label sample as anomaly.
     # 0.0 = ANY step (broad), 0.5 = majority (default), 1.0 = ALL steps (strict).
@@ -26,6 +31,9 @@ class EvalConfig:
 
     eval_subsets: List[str] = field(default_factory=lambda: ["full", "anomaly", "normal"])
 
+    adj_dir: str = "data/processed_data/adjacency"
+    adj_top_k: int = 10
+
     def flow_path(self, city: str) -> str:
         return f"{self.flow_dir}/flow_{city}_{self.start_date}_{self.end_date}_{self.freq_min}min.npy"
 
@@ -34,3 +42,6 @@ class EvalConfig:
 
     def weather_mask_path(self, city: str) -> str:
         return f"{self.mask_dir_weather}/mask_{city}_all_{self.start_date}_{self.end_date}_{self.freq_min}min.npy"
+
+    def adj_path(self, city: str) -> str:
+        return f"{self.adj_dir}/adj_{city}_corr_k{self.adj_top_k}.npy"
