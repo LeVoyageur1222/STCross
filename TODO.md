@@ -169,16 +169,26 @@
 - [x] `adj_NYC_corr_k10.npy` (820×820, 9608 edges)
 - [x] `adj_CHI_corr_k10.npy` (585×585, 9696 edges)
 
-### 2.1 STGCN
+### 2.1 STGCN ✅ 代码就绪，待用户运行
 
-> 文件：`model/stgcn.py` | 实现方式：适配开源
-> 代码源：https://github.com/VeritasYin/STGCN_IJCAI-18
+> 文件：`model/stgcn.py` | 实现方式：基于 hazdzz/STGCN PyTorch 版本忠实复现
 
-- [ ] ChebConv + TemporalConv + ST-Conv Block
-- [ ] 继承 `TorchModel`，`input_mode="all_nodes"`，构造函数接受 adj
-- [ ] 注册到 `model/registry.py`
-- [ ] **用户运行**：`python experiments/run_all.py --models STGCN --settings all`
+- [x] 核心模块（忠实还原 hazdzz benchmark 版本）：
+  - `scaled_laplacian()`: L̃ = L_sym - I，从邻接矩阵预计算
+  - `ChebGraphConv`: K 阶 Chebyshev 多项式递推 T_0=I, T_1=L̃, T_k=2L̃T_{k-1}-T_{k-2}，可学习权重 (K, C_in, C_out)
+  - `TemporalConvLayer`: Conv2d(kernel=(1,Kt)) + GLU 门控 (split + sigmoid)
+  - `GraphConvLayer`: 1×1 align + ChebConv + residual + ReLU
+  - `STConvBlock`: TemporalConv → GraphConv → TemporalConv → LayerNorm + Dropout
+  - `OutputLayer`: TemporalConv(Ko→1) → FC(C→C) → ReLU → FC(C→P)
+  - 默认配置：blocks=[[1,16,64],[64,16,64]], Ks=3, Kt=3, Ko=H-8=4
+- [x] 继承 `TorchModel`，`input_mode="all_nodes"`
+- [x] 构造函数接受 `adj` 邻接矩阵，注册时自动从 `config.adj_path()` 加载
+- [x] 注册到 `model/registry.py`
+- [x] Smoke test 通过（合成数据 MPS + 真实 CHI 数据完整 evaluator 流程）
+- [ ] **用户运行**：`python experiments/run_all.py --models STGCN --settings all --epochs 100 --batch_size 32 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
+
+> **跨城市迁移**：图卷积核权重 (K, C_in, C_out) 与 N 无关，跨城市时 registry 自动加载 target 城市邻接矩阵。
 
 ### 2.2 DCRNN
 

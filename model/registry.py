@@ -60,3 +60,16 @@ def build_timesnet(config: EvalConfig, train_config: TrainConfig):
         H=config.history_len, P=config.predict_len,
         train_config=train_config,
     )
+
+
+@register("STGCN")
+def build_stgcn(config: EvalConfig, train_config: TrainConfig):
+    import numpy as np
+    from model.stgcn import STGCNModel
+    adj = np.load(config.adj_path(config.target_city))
+    N = adj.shape[0]
+    return STGCNModel(
+        N=N, adj=adj,
+        H=config.history_len, P=config.predict_len,
+        train_config=train_config,
+    )

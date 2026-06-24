@@ -129,12 +129,17 @@ python experiments/run_all.py --models TimesNet --settings all \
 > 模型结构（忠实 TSLib 原版）：TokenEmbedding(Conv1d k=3) → predict_linear(H→H+P) → TimesBlock×2(FFT+2D Inception×6) → RevIN
 > 超参：d_model=32, d_ff=32, top_k=3, num_kernels=6, n_layers=2
 
-### STGCN
+### STGCN ✅ 已就绪
 
 ```bash
 python experiments/run_all.py --models STGCN --settings all \
     --epochs 100 --batch_size 32 --lr 1e-3
 ```
+
+> 预计 MPS 单次训练 ~15-30 min，4 设置合计 ~60-120 min。
+> 模型结构（忠实 hazdzz benchmark 版本）：2 × STConvBlock (TemporalConv-GLU → ChebGraphConv(K=3) → TemporalConv-GLU → LayerNorm) → OutputLayer(TemporalConv → FC → FC)
+> 默认 blocks=[[1,16,64],[64,16,64]], Ks=3, Kt=3
+> 邻接矩阵自动从 `data/processed_data/adjacency/` 加载（跨城市时加载 target 城市的）。
 
 ### DCRNN
 
