@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 
 @dataclass
@@ -62,8 +63,8 @@ class Trainer:
         patience_counter = 0
 
         for epoch in range(1, self.config.epochs + 1):
-            train_loss = self._run_epoch(model, train_loader, criterion, optimizer)
-            val_loss = self._run_epoch(model, val_loader, criterion)
+            train_loss = self._run_epoch(model, train_loader, criterion, optimizer, desc=f"Epoch {epoch:3d}/{self.config.epochs}")
+            val_loss = self._run_epoch(model, val_loader, criterion, desc=f"Val   {epoch:3d}/{self.config.epochs}")
             scheduler.step(val_loss)
 
             lr_now = optimizer.param_groups[0]["lr"]
@@ -91,14 +92,15 @@ class Trainer:
                                          weights_only=True))
         return ckpt_path
 
-    def _run_epoch(self, model, loader, criterion, optimizer=None):
+    def _run_epoch(self, model, loader, criterion, optimizer=None, desc=None):
         is_train = optimizer is not None
         model.train() if is_train else model.eval()
         total_loss = 0.0
         n_batches = 0
         ctx = torch.enable_grad() if is_train else torch.no_grad()
+        pbar = tqdm(loader, desc=desc, leave=False, unit="batch")
         with ctx:
-            for X, Y in loader:
+            for X, Y in pbar:
                 X, Y = X.to(self.device), Y.to(self.device)
                 pred = model(X)
                 loss = criterion(pred, Y)
@@ -110,4 +112,5 @@ class Trainer:
                     optimizer.step()
                 total_loss += loss.item()
                 n_batches += 1
+                pbar.set_postfix(loss=f"{total_loss / n_batches:.6f}")
         return total_loss / max(n_batches, 1)
