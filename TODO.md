@@ -428,23 +428,29 @@
 > **直接相关**：原始实验使用 NYC/CHI Bike + Taxi 数据，与本项目数据场景高度匹配
 > **核心思想**：全局趋势捕捉正常周期模式，局部极端度捕捉异常偏离程度，门控融合自适应平衡两者
 
-### 4.3 DAN（Distance-weighted Auto-regularized Network）
+### 4.3 DAN（Distance-weighted Auto-regularized Network） ✅ 代码就绪，待用户运行
 
 > 论文：*Learning from Polar Representation: An Extreme-Adaptive Model for Long-Term Time Series Forecasting* (AAAI 2024)
 > 代码源：https://github.com/davidanastasiu/dan
 
-- [ ] 获取代码，评估适配难度
-- [ ] 核心机制：远/近极性分解 + 距离加权损失
-  - **RepGen**：双通道编解码，分别生成 y_far (远离正常值) + y_near (靠近正常值)
-  - **RepMerg**：融合 far 隐变量 + 外部指示器 → 增强 far → 与 near 拼接 → FC 输出
-  - **距离加权损失**：w_f = (tanh(y))², w_n = (1-|tanh(y)|)²，自动平衡极端/正常样本
-  - **Kruskal-Wallis 采样**：极端数据不平衡重加权
-- [ ] 适配到 `TorchModel`，`input_mode="per_node"`
-- [ ] 注册到 `model/registry.py`
+- [x] 核心模块（忠实还原原始架构）：
+  - `PolarEncoder/Decoder`: 双通道 FC 编解码器（far + near）
+  - RepGen: Far encoder→decoder 产生 y_far; Near encoder→decoder 产生 y_near
+  - RepMerg: concat(h_far, y_near) → FC → y_final（融合极端隐变量 + 正常预测）
+  - Distance-weighted loss（数据中心化到 mean≈0 后）：
+    - w_far = tanh(y)² — 极端值高权重
+    - w_near = (1-|tanh(y)|)² — 正常值高权重
+    - L = w_far·MSE(y_far,y) + w_near·MSE(y_near,y) + MSE(y_final,y)
+  - 默认配置：d_model=64, dropout=0.1
+- [x] 继承 `TorchModel`，`input_mode="per_node"`
+- [x] 自定义 `fit()` 方法（distance-weighted dual-channel loss）
+- [x] 注册到 `model/registry.py`
+- [x] Smoke test 通过（dual forward + distance weights + backward 正确）
 - [ ] **用户运行**：`python experiments/run_all.py --models DAN --settings all --epochs 100 --batch_size 64 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
 
-> **参数量**：预计 ~50-100K (N-independent, per-series 双通道)
+> **参数量**：~26K (超轻量级, N-independent)，per-series 双通道 FC
+> **核心优雅设计**：距离加权自动平衡极端/正常样本——无需手动设阈值或采样策略
 > **注意**：原始应用为水文径流预测，但远/近极性分解 + 距离加权损失是通用极端值处理技术
 
 ### 4.4 ST-SSDL（Self-Supervised Deviation Learning）

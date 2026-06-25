@@ -157,3 +157,12 @@ def build_ealgap(config: EvalConfig, train_config: TrainConfig):
         H=config.history_len, P=config.predict_len,
         train_config=train_config,
     )
+
+
+@register("DAN")
+def build_dan(config: EvalConfig, train_config: TrainConfig):
+    from model.dan import DANModel
+    return DANModel(
+        H=config.history_len, P=config.predict_len,
+        train_config=train_config,
+    )

@@ -246,6 +246,19 @@ python experiments/run_all.py --models EALGAP --settings all \
 > 使用标准 Trainer（MSE loss），无需自定义 fit。
 > Channel-independent → 天然支持跨城市迁移，无需邻接矩阵。
 
+### DAN ✅ 已就绪
+
+```bash
+python experiments/run_all.py --models DAN --settings all \
+    --epochs 100 --batch_size 64 --lr 1e-3
+```
+
+> 预计 GPU 单次训练 ~3-5 min，4 设置合计 ~12-20 min。
+> 模型结构（忠实 davidanastasiu/dan）：Dual Polar Channels (Far encoder/decoder + Near encoder/decoder) → RepMerg(concat h_far + y_near → FC) → y_final
+> 默认 d_model=64, ~26K 参数（超轻量级）
+> **自定义 fit()**：distance-weighted loss (w_far=tanh²(y), w_near=(1-|tanh(y)|)²)
+> Channel-independent → 天然支持跨城市迁移，无需邻接矩阵。
+
 ---
 
 ## 完成一个模型后的流程
@@ -276,6 +289,7 @@ python experiments/run_all.py --models EALGAP --settings all \
 | Group C | ModernTCN | ~3-5 min | ~12-20 min |
 | Group D | EVL | ~5-10 min | ~20-40 min |
 | Group D | EALGAP | ~5-10 min | ~20-40 min |
+| Group D | DAN | ~3-5 min | ~12-20 min |
 
 > 以上为粗略估算，实际取决于 early stopping 触发时间。
 > Group B 模型因涉及图卷积 + 全节点输入 (batch, H, N)，显存/内存占用更大。
