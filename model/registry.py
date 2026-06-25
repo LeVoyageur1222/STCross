@@ -99,3 +99,16 @@ def build_gwnet(config: EvalConfig, train_config: TrainConfig):
         H=config.history_len, P=config.predict_len,
         train_config=train_config,
     )
+
+
+@register("STGODE")
+def build_stgode(config: EvalConfig, train_config: TrainConfig):
+    import numpy as np
+    from model.stgode import STGODEModel
+    adj = np.load(config.adj_path(config.target_city))
+    N = adj.shape[0]
+    return STGODEModel(
+        N=N, adj=adj,
+        H=config.history_len, P=config.predict_len,
+        train_config=train_config,
+    )

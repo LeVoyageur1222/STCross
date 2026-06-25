@@ -234,16 +234,29 @@
 > **参数量**：~170K (N-independent) + 自适应邻接 (NYC: +16K, CHI: +12K)
 > **跨城市迁移**：MixProp 权重与 N 无关，自适应邻接 E₁/E₂ 为 N-dependent 但会随 target 城市重建。固定 supports 在 registry 中自动加载 target 城市邻接。
 
-### 2.4 STGODE
+### 2.4 STGODE ✅ 代码就绪，待用户运行
 
-> 文件：`model/stgode.py` | 实现方式：适配开源
+> 文件：`model/stgode.py` | 实现方式：基于 square-coder/STGODE 忠实复现
 > 代码源：https://github.com/square-coder/STGODE
 
-- [ ] 图 ODE + 时间 ODE
-- [ ] 继承 `TorchModel`，`input_mode="all_nodes"`
-- [ ] 注册到 `model/registry.py`
-- [ ] **用户运行**：`python experiments/run_all.py --models STGODE --settings all`
+- [x] 核心模块（忠实还原原始架构）：
+  - `gcn_norm_adj()`: GCN 对称归一化 + self-loop (D̃^{-1/2} Ã D̃^{-1/2})
+  - `ODEFunc`: ODE 动力学函数 f(H,A) = A·H·W + H⊙d (W 初始化为 I, d 初始化为 1)
+  - `ODEG`: Euler 方法 ODE 图演化, 6 步积分 (ode_time=6.0, step_size=1.0)
+  - `TemporalConv`: 双层 TCN (CausalConv1d, kernel=3, dilation=[1,2]) + residual
+  - 双 ODEG 分支 (spatial + semantic)，独立权重，共享邻接
+  - 输出：Concat(2×d_model) → Flatten(H×2C) → FC(256) → FC(P)
+  - 默认配置：d_model=64, ode_time=6.0, step_size=1.0, dropout=0.1
+- [x] 继承 `TorchModel`，`input_mode="all_nodes"`
+- [x] 构造函数接受 `adj` 邻接矩阵，GCN 归一化后注册为 buffer
+- [x] 注册到 `model/registry.py`
+- [x] Smoke test 通过（合成数据 forward+backward 正确，NYC/CHI 尺寸验证）
+- [ ] **用户运行**：`python experiments/run_all.py --models STGODE --settings all --epochs 100 --batch_size 32 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
+
+> **参数量**：~418K (N-independent), buffer: NYC 2.7MB, CHI 1.4MB
+> **跨城市迁移**：所有可学习参数 (W, d, TCN, FC) 均与 N 无关，仅邻接 buffer 随 target 城市变化。
+> **原始论文使用双邻接**：A_sp (空间) + A_se (语义/DTW)。本实现使用相同的 correlation 邻接但独立 ODE 动力学权重，两个分支学习不同空间模式。
 
 ---
 

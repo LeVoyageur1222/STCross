@@ -167,12 +167,18 @@ python experiments/run_all.py --models GWNET --settings all \
 > 支撑矩阵：forward + backward random walk + 自适应邻接 (learnable E₁@E₂)
 > 邻接矩阵自动从 `data/processed_data/adjacency/` 加载。
 
-### STGODE
+### STGODE ✅ 已就绪
 
 ```bash
 python experiments/run_all.py --models STGODE --settings all \
     --epochs 100 --batch_size 32 --lr 1e-3
 ```
+
+> 预计 GPU 单次训练 ~15-30 min，4 设置合计 ~60-120 min。
+> 模型结构（忠实 square-coder/STGODE 版本）：TCN(CausalConv dilation=[1,2]) → 双 ODEG 分支(Euler ODE 图演化 6 步) → Concat → FC
+> ODE 动力学：f(H,A) = Ã·H·W + H⊙d (GCN + 对角残差)
+> 默认 d_model=64, ode_time=6.0, step_size=1.0, 418K 参数（N-independent）
+> 邻接矩阵自动从 `data/processed_data/adjacency/` 加载，GCN 归一化（对称 + self-loop）。
 
 ---
 
