@@ -314,20 +314,29 @@
 > **参数量**：~50K (N-independent)，所有参数为共享 Linear 层，天然支持跨城市迁移
 > **特色**：重建分支保留高频突变信号（对异常客流预测关键），对齐机制处理 train/test 分布不匹配
 
-### 3.2 ProtoTS (ST06)
+### 3.2 ProtoTS (ST06) ✅ 代码就绪，待用户运行
 
-> 论文：*ProtoTS: Hierarchical Prototypes for Explainable Time Series Forecasting* (ICLR 2026)
+> 论文：*ProtoTS: Learning Hierarchical Prototypes for Explainable Time Series Forecasting* (ICLR 2026)
 > 代码源：https://github.com/SKURA502/ProtoTS
 
-- [ ] 获取代码，评估适配难度
-- [ ] 核心机制：层次原型学习 + 可解释预测
-  - 全局共享原型库（不绑定特定节点）→ N-independent
-  - 可自然学习正常/异常时间模式的不同原型
-  - Multi-channel 处理中每个 channel 使用共享投影层
-- [ ] 适配到 `TorchModel`，`input_mode="per_node"`
-- [ ] 注册到 `model/registry.py`
-- [ ] **用户运行**：同城 + 跨城市 4 设置
+- [x] 核心模块（忠实还原原始架构）：
+  - `BottleneckMixerLayer`: MLP-Mixer with bottleneck (feature + time mixing, d_bottle=16)
+  - Input: Patching(patch_len=4, stride=2, 5 patches) → Linear embed → 2 层 BottleneckMixer
+  - Time Aggregation: (B, n_patches, d) → (B, d) via Linear
+  - Prototype Module: K 个原型，每个含嵌入 μ(K,d) + 时序模式 p(K,P)
+  - Similarity: Euclidean dist(z, μ_i) → softmax(-dist) → weights
+  - Prediction: Ŷ = Σ w_i · p_i（原型模式加权和）
+  - Loss: L1 + λ·H(w)（熵最小化 → 稀疏原型激活 → 可解释性）
+  - 默认配置：d_model=64, n_protos=8, n_mixer_layers=2, d_bottleneck=16, λ_ent=0.01
+- [x] 继承 `TorchModel`，`input_mode="per_node"`
+- [x] 自定义 `fit()` 方法（L1 + entropy regularization 替代标准 MSE）
+- [x] 注册到 `model/registry.py`
+- [x] Smoke test 通过（encode/predict/weights/backward 正确）
+- [ ] **用户运行**：`python experiments/run_all.py --models ProtoTS --settings all --epochs 100 --batch_size 64 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
+
+> **参数量**：~6K (超轻量级, N-independent)，所有参数为共享 Linear 层 + 原型嵌入/模式
+> **特色**：每个原型对应一个完整的预测曲线模式，可学习正常/异常的不同时序原型；entropy 正则化确保解释简洁（少数原型主导）
 
 ### 3.3 ModernTCN
 

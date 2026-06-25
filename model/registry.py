@@ -121,3 +121,12 @@ def build_timealign(config: EvalConfig, train_config: TrainConfig):
         H=config.history_len, P=config.predict_len,
         train_config=train_config,
     )
+
+
+@register("ProtoTS")
+def build_protots(config: EvalConfig, train_config: TrainConfig):
+    from model.protots import ProtoTSModel
+    return ProtoTSModel(
+        H=config.history_len, P=config.predict_len,
+        train_config=train_config,
+    )
