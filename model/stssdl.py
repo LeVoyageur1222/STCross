@@ -36,6 +36,11 @@ from data_preprocess.torch_dataset import build_dataloader
 class STSSDLModel(TorchModel):
     """ST-SSDL for deviation-aware time series prediction.
 
+    Note: This is an "ST-SSDL-lite" adaptation. The original paper uses a GCRU
+    (graph conv GRU) backbone with dual-branch encoding (current + weekly-average
+    anchor), while this implementation uses a per-node Linear encoder as an
+    N-independent adaptation.
+
     Architecture (adapted from Jimmy-7664/ST-SSDL, per-node mode):
         1. Historical anchoring: x_dev = x - running_mean(x)
         2. Patch + Linear encoder → latent z ∈ R^d
@@ -115,13 +120,20 @@ class STSSDLModel(TorchModel):
         pred = pred + x_mean
         return pred.unsqueeze(-1)
 
-    def _contrastive_loss(self):
-        """Push prototypes apart: maximize pairwise distances."""
-        dist_matrix = torch.cdist(self.prototypes.unsqueeze(0),
-                                  self.prototypes.unsqueeze(0)).squeeze(0)
-        mask = 1.0 - torch.eye(self.n_protos, device=dist_matrix.device)
-        mean_dist = (dist_matrix * mask).sum() / mask.sum()
-        return -mean_dist
+    def _contrastive_loss(self, z, dist):
+        """Triplet-like contrastive loss with stop-gradient on query.
+
+        For each input, find top-1 (positive) and top-2 (negative) prototypes,
+        and apply margin loss to push them apart.
+        """
+        z_sg = z.detach()  # stop gradient on query
+        # Top-1 = positive, top-2 = negative
+        sorted_dist, _ = dist.sort(dim=-1)
+        pos_dist = sorted_dist[:, 0]  # distance to nearest
+        neg_dist = sorted_dist[:, 1]  # distance to second nearest
+        margin = 0.5
+        loss = F.relu(pos_dist - neg_dist + margin).mean()
+        return loss
 
     def _deviation_loss(self, min_dist: torch.Tensor,
                         pred: torch.Tensor, target: torch.Tensor):
@@ -176,13 +188,13 @@ class STSSDLModel(TorchModel):
                 y_target = Y_flat.squeeze(-1)
 
                 z, x_mean = self._anchor_and_encode(X_flat)
-                nearest, min_dist, _ = self._assign_prototype(z)
+                nearest, min_dist, dist = self._assign_prototype(z)
 
                 feat = torch.cat([z, nearest], dim=-1)
                 pred = self.pred_head(feat) + x_mean
 
-                loss_pred = F.mse_loss(pred, y_target)
-                loss_contrast = self._contrastive_loss()
+                loss_pred = F.l1_loss(pred, y_target)
+                loss_contrast = self._contrastive_loss(z, dist)
                 loss_dev = self._deviation_loss(min_dist, pred, y_target)
 
                 loss = loss_pred + self.alpha * loss_contrast + self.beta * loss_dev
@@ -207,7 +219,7 @@ class STSSDLModel(TorchModel):
                                  leave=False, unit="batch"):
                     X, Y = X.to(device), Y.to(device)
                     pred = self.forward(X)
-                    val_total += F.mse_loss(pred, Y).item()
+                    val_total += F.l1_loss(pred, Y).item()
                     n_val += 1
 
             val_loss = val_total / max(n_val, 1)

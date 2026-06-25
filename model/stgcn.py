@@ -6,7 +6,7 @@ Faithful PyTorch reimplementation based on:
 
 Key architecture:
     Input → STConvBlock × 2 (TemporalConv-GLU → ChebGraphConv → TemporalConv-GLU) → OutputLayer
-    Tensor layout: (B, C, T, N) throughout.
+    Tensor layout: (B, C, N, T) throughout.
 """
 
 import math
@@ -21,7 +21,7 @@ from train.trainer import TrainConfig
 
 
 def scaled_laplacian(adj: np.ndarray) -> np.ndarray:
-    """Compute scaled Laplacian L̃ = 2*L_sym/λ_max - I (with λ_max≈2 → L̃ = L_sym - I)."""
+    """Compute scaled Laplacian L̃ = 2*L_sym/λ_max - I."""
     n = adj.shape[0]
     d = adj.sum(axis=1)
     d_inv_sqrt = np.zeros_like(d)
@@ -29,7 +29,8 @@ def scaled_laplacian(adj: np.ndarray) -> np.ndarray:
     d_inv_sqrt[mask] = d[mask] ** (-0.5)
     D_inv_sqrt = np.diag(d_inv_sqrt)
     L_sym = np.eye(n) - D_inv_sqrt @ adj @ D_inv_sqrt
-    return (L_sym - np.eye(n)).astype(np.float32)
+    lambda_max = np.linalg.eigvalsh(L_sym).max()
+    return (2 * L_sym / lambda_max - np.eye(n)).astype(np.float32)
 
 
 class ChebGraphConv(nn.Module):
@@ -105,15 +106,15 @@ class STConvBlock(nn.Module):
                  c_in: int, c_hid: int, c_out: int,
                  gso: torch.Tensor, dropout: float = 0.0):
         super().__init__()
-        self.tcl1 = TemporalConvLayer(Kt, c_in, c_out)
-        self.gcl = GraphConvLayer(c_out, c_hid, Ks, gso)
+        self.tcl1 = TemporalConvLayer(Kt, c_in, c_hid)
+        self.gcl = GraphConvLayer(c_hid, c_hid, Ks, gso)
         self.tcl2 = TemporalConvLayer(Kt, c_hid, c_out)
         self.ln = nn.LayerNorm([c_out, N])
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (B, C_in, N, T)
-        x = self.tcl1(x)      # (B, C_out, N, T-Kt+1)
+        x = self.tcl1(x)      # (B, C_hid, N, T-Kt+1)
         x = self.gcl(x)       # (B, C_hid, N, T-Kt+1)
         x = self.tcl2(x)      # (B, C_out, N, T-2*(Kt-1))
         # LayerNorm over (C_out, N)
@@ -154,8 +155,9 @@ class STGCNModel(TorchModel):
 
         last_c = blocks[-1][2]
         self.output_tcl = TemporalConvLayer(Ko, last_c, last_c)
-        self.fc1 = nn.Linear(last_c, last_c)
-        self.fc2 = nn.Linear(last_c, P)
+        self.output_ln = nn.LayerNorm([last_c, N])
+        self.output_tcl2 = TemporalConvLayer(1, last_c, last_c)
+        self.fc = nn.Linear(last_c, P)
 
     @property
     def name(self) -> str:
@@ -168,9 +170,10 @@ class STGCNModel(TorchModel):
         for block in self.st_blocks:
             x = block(x)  # (B, C_out, N, Ko)
 
-        # Output layer: temporal squeeze → FC
+        # Output layer: temporal squeeze → LayerNorm → temporal conv → FC
         x = self.output_tcl(x)              # (B, C_out, N, 1)
+        x = self.output_ln(x.squeeze(-1)).unsqueeze(-1)  # (B, C_out, N, 1)
+        x = self.output_tcl2(x)             # (B, C_out, N, 1)
         x = x.squeeze(-1).permute(0, 2, 1)  # (B, N, C_out)
-        x = F.relu(self.fc1(x))             # (B, N, C_out)
-        x = self.fc2(x)                     # (B, N, P)
+        x = self.fc(x)                      # (B, N, P)
         return x.permute(0, 2, 1)            # (B, P, N)

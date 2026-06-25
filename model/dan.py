@@ -58,6 +58,9 @@ class PolarDecoder(nn.Module):
 class DANModel(TorchModel):
     """DAN for extreme-adaptive time series prediction.
 
+    Note: This is a simplified version using FC backbone instead of the paper's
+    CNN+LSTM encoder/decoder architecture.
+
     Architecture (faithful to davidanastasiu/dan):
         1. RepGen: Dual-channel processing
            - Far encoder/decoder: captures patterns far from normal (extreme values)
@@ -173,7 +176,9 @@ class DANModel(TorchModel):
 
                 y_final, y_far, y_near = self._forward_dual(X_flat)
 
-                w_far, w_near = self._distance_weights(y_target)
+                # Center target before computing distance weights
+                y_centered = y_target - y_target.mean(dim=0, keepdim=True)
+                w_far, w_near = self._distance_weights(y_centered)
 
                 loss_far = (w_far * (y_far - y_target) ** 2).mean()
                 loss_near = (w_near * (y_near - y_target) ** 2).mean()

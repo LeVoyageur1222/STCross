@@ -14,6 +14,7 @@ Uses standard MSE loss via default Trainer — no custom fit() needed.
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from model.torch_base import TorchModel
 from train.trainer import TrainConfig
@@ -74,7 +75,10 @@ class ModernTCNModel(TorchModel):
         self.P = P
         self.patch_len = patch_len
         self.stride = stride
-        self.n_patches = (H - patch_len) // stride + 1
+        # Compute n_patches based on padded length for robustness
+        pad_len = (stride - (H - patch_len) % stride) % stride
+        padded_H = H + pad_len
+        self.n_patches = (padded_H - patch_len) // stride + 1
 
         self.embed = nn.Linear(patch_len, d_model)
 
@@ -92,6 +96,11 @@ class ModernTCNModel(TorchModel):
 
     def _net_forward(self, X: torch.Tensor) -> torch.Tensor:
         x = X.squeeze(-1)
+        # Pad to ensure all timesteps are covered
+        len_x = x.size(1)
+        pad_len = (self.stride - (len_x - self.patch_len) % self.stride) % self.stride
+        if pad_len > 0:
+            x = F.pad(x, (0, pad_len), mode='replicate')
         patches = x.unfold(1, self.patch_len, self.stride)
         h = self.embed(patches)
 

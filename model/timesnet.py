@@ -58,7 +58,7 @@ def fft_for_period(x: torch.Tensor, k: int):
     top_idx_list = top_idx.detach().cpu().numpy()
 
     T = x.shape[1]
-    periods = [max(2, T // (int(idx) + 1)) for idx in top_idx_list]
+    periods = [max(2, T // int(idx)) for idx in top_idx_list]
     weights = amp[:, top_idx]  # (B, k) per-sample weights
 
     return periods, weights
@@ -78,7 +78,7 @@ class TimesBlock(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, T, N = x.shape
-        periods, period_weight = fft_for_period(x.detach(), self.top_k)
+        periods, period_weight = fft_for_period(x, self.top_k)
 
         res_list = []
         for i, p in enumerate(periods):

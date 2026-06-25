@@ -1,4 +1,3 @@
-import math
 
 import torch
 import torch.nn as nn
@@ -25,19 +24,6 @@ class PatchEmbedding(nn.Module):
         return self.proj(patches)  # (B, num_patches, d_model)
 
 
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model: int, max_len: int = 256):
-        super().__init__()
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term[:d_model // 2])
-        self.register_buffer("pe", pe.unsqueeze(0))  # (1, max_len, d_model)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + self.pe[:, :x.size(1), :]
-
 
 class PatchTSTModel(TorchModel):
     """PatchTST: patch-based Transformer for time series forecasting.
@@ -58,7 +44,7 @@ class PatchTSTModel(TorchModel):
 
         self.patch_embed = PatchEmbedding(H, patch_len, stride, d_model)
         num_patches = self.patch_embed.num_patches
-        self.pos_enc = PositionalEncoding(d_model, max_len=num_patches)
+        self.pos_embed = nn.Parameter(torch.randn(1, num_patches, d_model) * 0.02)
         self.dropout = nn.Dropout(dropout)
 
         encoder_layer = nn.TransformerEncoderLayer(
@@ -74,10 +60,19 @@ class PatchTSTModel(TorchModel):
 
     def _net_forward(self, X: torch.Tensor) -> torch.Tensor:
         # X: (B, H, 1)
-        z = self.patch_embed(X)      # (B, num_patches, d_model)
-        z = self.pos_enc(z)
+        # RevIN normalize
+        means = X.mean(dim=1, keepdim=True).detach()
+        x_norm = X - means
+        stdev = torch.sqrt(x_norm.var(dim=1, keepdim=True, unbiased=False) + 1e-5).detach()
+        x_norm = x_norm / stdev
+
+        z = self.patch_embed(x_norm)  # (B, num_patches, d_model)
+        z = z + self.pos_embed
         z = self.dropout(z)
         z = self.encoder(z)          # (B, num_patches, d_model)
         z = z.reshape(z.size(0), -1) # (B, num_patches * d_model)
         pred = self.head(z)          # (B, P)
-        return pred.unsqueeze(-1)    # (B, P, 1)
+        out = pred.unsqueeze(-1)     # (B, P, 1)
+        # RevIN denormalize
+        out = out * stdev + means
+        return out

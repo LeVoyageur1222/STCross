@@ -106,6 +106,7 @@ class EVLModel(TorchModel):
         self.hidden_dim = hidden_dim
         self.lambda_evl = lambda_evl
         self.extreme_percentile = extreme_percentile
+        self.extreme_threshold = 0.0
 
         self.lstm = nn.LSTM(
             input_size=1, hidden_size=hidden_dim,
@@ -149,12 +150,9 @@ class EVLModel(TorchModel):
         return pred.unsqueeze(-1)
 
     def _compute_extreme_labels(self, Y: torch.Tensor) -> torch.Tensor:
-        """Generate binary extreme labels based on percentile threshold."""
+        """Generate binary extreme labels based on dataset-level threshold."""
         y_flat = Y.squeeze(-1)
-        threshold_high = torch.quantile(
-            y_flat.abs(), self.extreme_percentile / 100.0)
-        labels = (y_flat.abs() >= threshold_high).float()
-        return labels
+        return (y_flat.abs() >= self.extreme_threshold).float()
 
     def fit(self, train_X: np.ndarray, train_Y: np.ndarray,
             val_X: np.ndarray, val_Y: np.ndarray) -> None:
@@ -171,6 +169,10 @@ class EVLModel(TorchModel):
 
         device = self._device
         self.to(device)
+
+        # Compute dataset-level extreme threshold once
+        all_Y_abs = np.abs(train_Y).flatten()
+        self.extreme_threshold = float(np.percentile(all_Y_abs, self.extreme_percentile))
 
         optimizer = torch.optim.Adam(
             self.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)

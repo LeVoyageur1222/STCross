@@ -3,7 +3,7 @@
 > 本文件为 STCross 项目的实验主规划，所有后续实验开发均以此为准。
 > 相关文档：[运行指南](RUN_GUIDE.md) | [结果汇总](results/RESULTS.md)
 >
-> 最后更新：2026-06-25（Phase 1-3 完成 + Phase 4 极端预测方法规划）
+> 最后更新：2026-06-25（Phase 1-4 完成 + 代码审查修复完成）
 
 ---
 
@@ -88,6 +88,21 @@
 - [x] P1（10 项）：消除 hasattr、近零 std 防护、邻接确定性、checkpoint 检查、skip config 校验、共享 registry、错误隔离、种子、input_mode 校验、梯度裁剪可配置
 - [x] P2（3 项）：pin_memory 条件启用、邻接向量化、训练/评估合并
 
+### Baseline 代码忠实度审查修复 ✅ (15 模型全覆盖)
+- [x] P0（4 模型重点修复）：
+  - TimesNet: FFT 周期公式 `T//(idx+1)`→`T//idx`; 移除 `.detach()` 恢复梯度流
+  - STGCN: STConvBlock 通道路由 c_in→c_hid; scaled_laplacian 计算实际 λ_max; OutputLayer 加 LN+第二TCL
+  - TimeAlign: 全面重写 — 动态权重公式、local/global alignment、RevIN、PE、LN、d_ff 扩展、非重叠 patch、L1 loss
+  - EALGAP: 全面重写 — 指数分布 PDF 生成 Q/K/V、z-score+tanh 极端度、乘法融合
+- [x] P1（3 模型修复）：
+  - PatchTST: 固定 PE→可学习 PE; 添加 RevIN
+  - GWNET: skip_ch 128→256, end_ch 256→512 (恢复论文默认值)
+  - EVL: 极端标签从 per-batch 改为 dataset-level 百分位阈值
+- [x] P2（3 模型改进）：
+  - ModernTCN: 输入 padding 鲁棒性 (支持任意 H)
+  - DAN: 距离权重前显式中心化; 文档化 FC 简化
+  - STSSDL: triplet 对比损失+stop-gradient; L1 替代 MSE; 文档化为 ST-SSDL-lite
+
 </details>
 
 ---
@@ -130,7 +145,7 @@
 
 > 文件：`model/patchtst.py` | 实现方式：自主实现（参考原论文架构）
 
-- [x] 网络结构：PatchEmbedding(patch_len=4, stride=2) → PositionalEncoding → TransformerEncoder(d_model=64, n_heads=4, n_layers=2, d_ff=128) → Linear → (B, P, 1)
+- [x] 网络结构：PatchEmbedding(patch_len=4, stride=2) → Learnable PE → TransformerEncoder(d_model=64, n_heads=4, n_layers=2, d_ff=128) → Linear → RevIN denormalize → (B, P, 1)
 - [x] 继承 `TorchModel`，`input_mode="per_node"`
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（CHI 3 epochs）
@@ -174,13 +189,14 @@
 > 文件：`model/stgcn.py` | 实现方式：基于 hazdzz/STGCN PyTorch 版本忠实复现
 
 - [x] 核心模块（忠实还原 hazdzz benchmark 版本）：
-  - `scaled_laplacian()`: L̃ = L_sym - I，从邻接矩阵预计算
+  - `scaled_laplacian()`: 计算实际 λ_max → L̃ = 2L_sym/λ_max - I
   - `ChebGraphConv`: K 阶 Chebyshev 多项式递推 T_0=I, T_1=L̃, T_k=2L̃T_{k-1}-T_{k-2}，可学习权重 (K, C_in, C_out)
   - `TemporalConvLayer`: Conv2d(kernel=(1,Kt)) + GLU 门控 (split + sigmoid)
   - `GraphConvLayer`: 1×1 align + ChebConv + residual + ReLU
-  - `STConvBlock`: TemporalConv → GraphConv → TemporalConv → LayerNorm + Dropout
-  - `OutputLayer`: TemporalConv(Ko→1) → FC(C→C) → ReLU → FC(C→P)
-  - 默认配置：blocks=[[1,16,64],[64,16,64]], Ks=3, Kt=3, Ko=H-8=4
+  - `STConvBlock`: TemporalConv(c_in→c_hid) → GraphConv(c_hid→c_hid) → TemporalConv(c_hid→c_out) → LayerNorm + Dropout
+  - `OutputLayer`: TemporalConv(Ko→1) → LayerNorm → TemporalConv(1) → FC(C→P)
+  - 张量布局：(B, C, N, T)
+  - 默认配置：blocks=[[1,16,64],[64,16,64]], Ks=3, Kt=3, Ko=H-8=4, ~82K 参数
 - [x] 继承 `TorchModel`，`input_mode="all_nodes"`
 - [x] 构造函数接受 `adj` 邻接矩阵，注册时自动从 `config.adj_path()` 加载
 - [x] 注册到 `model/registry.py`
@@ -223,7 +239,7 @@
   - Gated TCN: tanh(filter_conv) ⊙ sigmoid(gate_conv)
   - Adaptive Adjacency: learnable E₁(N,10) @ E₂(10,N) → softmax(ReLU(·))
   - Skip connections: 每层 skip 累加，最终 ReLU → end_conv1 → ReLU → end_conv2
-  - 默认配置：residual_ch=32, dilation_ch=32, skip_ch=128, end_ch=256, blocks=4, layers=2, order=2, dropout=0.3
+  - 默认配置：residual_ch=32, dilation_ch=32, skip_ch=256, end_ch=512, blocks=4, layers=2, order=2, dropout=0.3
 - [x] 继承 `TorchModel`，`input_mode="all_nodes"`
 - [x] 构造函数接受 `adj` 邻接矩阵，支撑矩阵 (forward + backward RW) 注册为 buffer
 - [x] 注册到 `model/registry.py`
@@ -231,7 +247,7 @@
 - [ ] **用户运行**：`python experiments/run_all.py --models GWNET --settings all --epochs 100 --batch_size 32 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
 
-> **参数量**：~170K (N-independent) + 自适应邻接 (NYC: +16K, CHI: +12K)
+> **参数量**：~306K (N-independent) + 自适应邻接 (NYC: +16K, CHI: +12K)
 > **跨城市迁移**：MixProp 权重与 N 无关，自适应邻接 E₁/E₂ 为 N-dependent 但会随 target 城市重建。固定 supports 在 registry 中自动加载 target 城市邻接。
 
 ### 2.4 STGODE ✅ 代码就绪，待用户运行
@@ -295,24 +311,26 @@
 > 论文：*Bridging Past and Future: Distribution-Aware Alignment for Time Series Forecasting* (ICLR 2026)
 > 代码源：https://github.com/TROUBADOUR000/TimeAlign
 
-- [x] 核心模块（忠实还原原始架构）：
-  - `PatchEncoder`: Patching(patch_len=4, stride=2, 5 patches) → Linear embed → M 层 (Linear-GELU-Linear + residual)
-  - Predict Branch: PatchEncoder(history) → Linear head → (B, P, 1)
-  - Reconstruct Branch (仅训练): PatchEncoder(future) → Linear head → (B, P)，重建分支 stop-gradient
-  - Local Alignment: patch 级余弦相似度 + margin δ_loc + GELU 软阈值
-  - Global Alignment: 距离矩阵匹配 |D_x - D_y| + margin δ_glo + GELU
-  - Dynamic Weighting: α/β 自适应平衡 local/global 损失
-  - 总损失: L_pred + L_recon + λ · L_align
-  - 默认配置: d_model=64, n_layers=2, patch_len=4, stride=2, λ=1.0, δ_loc=0.1, δ_glo=0.1
+- [x] 核心模块（基于参考代码 TROUBADOUR000/TimeAlign 忠实复现）：
+  - `RevIN`: 可逆实例归一化 (subtract mean/std → reverse after prediction)
+  - `SinusoidalPositionalEmbedding`: patch 位置编码
+  - `PatchEncoder`: 非重叠 Patching(patch_num=4, patch_len=H//4=3) → Linear embed → PE → M 层 (Linear(d,d_ff)-GELU-Dropout-Linear(d_ff,d) + LayerNorm + residual)
+  - Predict Branch: RevIN → PatchEncoder(history) → Linear head → RevIN denorm → (B, P, 1)
+  - Reconstruct Branch (仅训练): RevIN → PatchEncoder(future) → Linear head → RevIN denorm，重建分支 stop-gradient
+  - Local Alignment: element-wise |h_x·h_y| + margin δ_loc + GELU 软阈值（L2归一化后）
+  - Global Alignment: L2归一化距离矩阵匹配 + margin δ_glo + GELU (element-wise before mean)
+  - Dynamic Weighting: w_avg = mean(detached losses), sum(w_avg * loss_i / loss_i.detach())
+  - 总损失: L1_pred + L1_recon + λ · L_align
+  - 默认配置: d_model=64, d_ff=256, n_layers=2, patch_num=4, λ=1.0, δ_loc=0.1, δ_glo=0.1
 - [x] 继承 `TorchModel`，`input_mode="per_node"`
-- [x] 自定义 `fit()` 方法（重建分支需要训练时访问 Y）
+- [x] 自定义 `fit()` 方法（重建分支需要训练时访问 Y，使用 L1 loss）
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（inference + training forward + backward 正确）
 - [ ] **用户运行**：`python experiments/run_all.py --models TimeAlign --settings all --epochs 100 --batch_size 64 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
 
-> **参数量**：~50K (N-independent)，所有参数为共享 Linear 层，天然支持跨城市迁移
-> **特色**：重建分支保留高频突变信号（对异常客流预测关键），对齐机制处理 train/test 分布不匹配
+> **参数量**：~148K (N-independent)，所有参数为共享 Linear 层，天然支持跨城市迁移
+> **特色**：RevIN 处理分布偏移；重建分支保留高频突变信号；对齐机制 (local element-wise + global distance matrix) 弥合过去与未来分布鸿沟；动态权重自适应平衡
 
 ### 3.2 ProtoTS (ST06) ✅ 代码就绪，待用户运行
 
@@ -391,7 +409,7 @@
   - LSTM backbone: 2 层 LSTM (hidden=64, dropout=0.1)
   - Prediction head: concat(h, memory_out) → FC → ŷ (regression)
   - Extreme classifier: concat(h, memory_out) → FC → sigmoid → P(extreme)
-  - 极端标签自动生成：|y| > 90th percentile → extreme=1
+  - 极端标签自动生成：数据集级 |y| > 90th percentile → extreme=1（训练前一次性计算阈值）
   - 总损失：MSE(ŷ, y) + λ · EVL(P(extreme), extreme_label)
   - 默认配置：hidden=64, mem_size=16, λ_evl=0.1, γ=3.0, extreme_pct=90
 - [x] 继承 `TorchModel`，`input_mode="per_node"`
@@ -410,36 +428,34 @@
 > 论文：*Extreme-Aware Local-Global Attention for Spatio-Temporal Urban Mobility Learning* (ICDE 2023)
 > 代码源：https://github.com/HuiqunHuang/EALGAP
 
-- [x] 核心模块（忠实还原原始架构）：
-  - `GlobalTrendModule`: 输入嵌入 → Multi-Head Self-Attention(4 heads) → LayerNorm + residual → 捕获全局周期/趋势模式
-  - `LocalExtremeModule`: 计算运行 z-score 偏差 → 嵌入 → GRU → 预测极端程度
-  - Global head: flatten(H×d) → FC(256) → ReLU → FC(P) → 全局趋势预测
-  - Local head: GRU output → FC(H→P) → 局部极端度预测
-  - Gated Fusion: concat(global, local) → sigmoid gate → 加权融合 → ReLU → output
-  - 默认配置：d_model=64, n_heads=4, gru_hidden=32, dropout=0.1
+- [x] 核心模块（基于参考代码 HuiqunHuang/EALGAP 忠实复现）：
+  - `GlobalTrendModule`: 在线计算指数分布 PDF(λ=1/mean|x|) → concat(x, pdf) 嵌入 → MLP decoder(Dense→softmax→Dense→softmax) 生成数据依赖 Q/K/V → Multi-Head SA(4 heads) → LayerNorm + residual → FC → 全局趋势预测
+  - `LocalExtremeModule`: 实例 z-score 归一化 → learnable γ scaling → tanh 边界化到[-1,1] → GRU → tanh 输出 → FC → 局部极端度预测
+  - 最终融合（乘法调制）: output = ReLU(global_pred × (1 + extreme_degree))
+  - 默认配置：d_model=64, n_heads=4, gru_hidden=32
 - [x] 继承 `TorchModel`，`input_mode="per_node"`
 - [x] 使用标准 `Trainer`（MSE loss），无需自定义 fit
 - [x] 注册到 `model/registry.py`
-- [x] Smoke test 通过（global + local + fusion + backward 正确）
+- [x] Smoke test 通过（PDF Q/K/V + z-score tanh + 乘法融合 + backward 正确）
 - [ ] **用户运行**：`python experiments/run_all.py --models EALGAP --settings all --epochs 100 --batch_size 64 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
 
-> **参数量**：~224K (N-independent)，SA + GRU + FC 全共享
+> **参数量**：~244K (N-independent)，SA + MLP decoder + GRU + FC 全共享
 > **直接相关**：原始实验使用 NYC/CHI Bike + Taxi 数据，与本项目数据场景高度匹配
-> **核心思想**：全局趋势捕捉正常周期模式，局部极端度捕捉异常偏离程度，门控融合自适应平衡两者
+> **核心思想**：指数分布 PDF 感知全局趋势 + tanh 边界化极端度 + 乘法调制 output = global × (1 + extreme)
 
 ### 4.3 DAN（Distance-weighted Auto-regularized Network） ✅ 代码就绪，待用户运行
 
 > 论文：*Learning from Polar Representation: An Extreme-Adaptive Model for Long-Term Time Series Forecasting* (AAAI 2024)
 > 代码源：https://github.com/davidanastasiu/dan
 
-- [x] 核心模块（忠实还原原始架构）：
+- [x] 核心模块（简化适配原始架构，FC backbone 替代论文 CNN+LSTM）：
   - `PolarEncoder/Decoder`: 双通道 FC 编解码器（far + near）
   - RepGen: Far encoder→decoder 产生 y_far; Near encoder→decoder 产生 y_near
   - RepMerg: concat(h_far, y_near) → FC → y_final（融合极端隐变量 + 正常预测）
-  - Distance-weighted loss（数据中心化到 mean≈0 后）：
-    - w_far = tanh(y)² — 极端值高权重
-    - w_near = (1-|tanh(y)|)² — 正常值高权重
+  - Distance-weighted loss（训练时显式中心化后计算权重）：
+    - w_far = tanh(y_centered)² — 极端值高权重
+    - w_near = (1-|tanh(y_centered)|)² — 正常值高权重
     - L = w_far·MSE(y_far,y) + w_near·MSE(y_near,y) + MSE(y_final,y)
   - 默认配置：d_model=64, dropout=0.1
 - [x] 继承 `TorchModel`，`input_mode="per_node"`
@@ -458,20 +474,20 @@
 > 论文：*How Different from the Past? Spatio-Temporal Time Series Forecasting with Self-Supervised Deviation Learning* (NeurIPS 2025)
 > 代码源：https://github.com/Jimmy-7664/ST-SSDL
 
-- [x] 核心模块（适配原始架构为 per-node 模式）：
+- [x] 核心模块（ST-SSDL-lite：适配原始架构为 per-node 模式，替换 GCRU backbone 为 Linear encoder 以确保 N-independent）：
   - Historical Anchoring: x_dev = x - mean(x)，提取偏差信号
   - Encoder: Patching(4,2) → Linear embed → FC(n_patches×d, d) → GELU → FC(d, d) → z ∈ R^d
   - Learnable Prototypes: K=8 个全局共享原型 μ ∈ R^(K, d)
   - Prototype Assignment: argmin_k ||z - μ_k|| → 找到最近原型
   - Prediction head: concat(z, μ_nearest) → FC → ŷ (加回 x_mean 恢复尺度)
   - Triple loss:
-    - L_pred = MSE(ŷ, y)
-    - L_contrast = -mean(pairwise prototype distances) → 推开原型增强判别性
+    - L_pred = L1(ŷ, y)（使用 MAE 替代 MSE，与论文一致）
+    - L_contrast = triplet margin loss (top-1 positive, top-2 negative, margin=0.5, stop-gradient on query)
     - L_deviation = MSE(||z - μ*||, |ŷ - y|_mean) → 距离≈误差一致性
     - L_total = L_pred + α·L_contrast + β·L_deviation
   - 默认配置：d_model=64, n_protos=8, α=0.01, β=0.1, patch_len=4, stride=2
-- [x] 继承 `TorchModel`，`input_mode="per_node"`（替换 STGNN backbone 为 per-node encoder）
-- [x] 自定义 `fit()` 方法（triple loss）
+- [x] 继承 `TorchModel`，`input_mode="per_node"`
+- [x] 自定义 `fit()` 方法（triple loss，L1 primary loss）
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（anchor + encode + assign + contrastive + deviation + backward 正确）
 - [ ] **用户运行**：`python experiments/run_all.py --models STSSDL --settings all --epochs 100 --batch_size 64 --lr 1e-3`
