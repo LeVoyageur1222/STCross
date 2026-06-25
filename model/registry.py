@@ -130,3 +130,12 @@ def build_protots(config: EvalConfig, train_config: TrainConfig):
         H=config.history_len, P=config.predict_len,
         train_config=train_config,
     )
+
+
+@register("ModernTCN")
+def build_moderntcn(config: EvalConfig, train_config: TrainConfig):
+    from model.moderntcn import ModernTCNModel
+    return ModernTCNModel(
+        H=config.history_len, P=config.predict_len,
+        train_config=train_config,
+    )

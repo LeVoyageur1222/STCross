@@ -338,21 +338,27 @@
 > **参数量**：~6K (超轻量级, N-independent)，所有参数为共享 Linear 层 + 原型嵌入/模式
 > **特色**：每个原型对应一个完整的预测曲线模式，可学习正常/异常的不同时序原型；entropy 正则化确保解释简洁（少数原型主导）
 
-### 3.3 ModernTCN
+### 3.3 ModernTCN ✅ 代码就绪，待用户运行
 
 > 论文：*ModernTCN: A Modern Pure Convolution Structure for General Time Series Analysis* (ICLR 2024 Spotlight, 分数 8/8/8)
 > 代码源：https://github.com/luodhhh/ModernTCN
 
-- [ ] 获取代码，评估适配难度
-- [ ] 核心机制：现代纯卷积架构
-  - DWConv (大 kernel Depthwise Convolution) + ConvFFN + 残差
-  - Channel-independent 模式 → 所有参数 N-independent
-  - 代表"纯卷积挑战 Transformer"的最新范式
-  - 在 5 类时序分析任务上达到一致 SOTA
-- [ ] 适配到 `TorchModel`，`input_mode="per_node"`
-- [ ] 注册到 `model/registry.py`
-- [ ] **用户运行**：同城 + 跨城市 4 设置
+- [x] 核心模块（忠实还原原始架构 CI 模式）：
+  - `ModernTCNBlock`: ConvNeXt 风格设计
+    - LN → DWConv(kernel=5, groups=d, 大感受野) → residual
+    - LN → ConvFFN(Linear d→d_ff→d, GELU, Dropout) → residual
+  - Patching(patch_len=4, stride=2, 5 patches) → Linear embed
+  - 2 层 ModernTCNBlock → Final LN → Flatten → Linear head → (B, P, 1)
+  - 默认配置：d_model=64, d_ff=128, kernel=5, n_layers=2, dropout=0.1
+- [x] 继承 `TorchModel`，`input_mode="per_node"`
+- [x] 使用标准 `Trainer` 训练（MSE loss，无需自定义 fit）
+- [x] 注册到 `model/registry.py`
+- [x] Smoke test 通过（forward + backward 正确）
+- [ ] **用户运行**：`python experiments/run_all.py --models ModernTCN --settings all --epochs 100 --batch_size 64 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
+
+> **参数量**：~39K (N-independent)，纯卷积架构，channel-independent → 天然支持跨城市迁移
+> **特色**：ICLR 2024 Spotlight，证明"纯卷积可以在所有 5 类时序分析任务上达到一致 SOTA"，大 kernel DWConv 是核心创新
 
 ---
 
@@ -432,5 +438,5 @@ Phase 0 ✅
 - [x] **HA**：全量评测完成
 - [x] **Phase 1**：LSTM ✅ / DLinear ✅ / PatchTST ✅ / TimesNet ✅（代码就绪，待用户运行）
 - [x] **Phase 2**：STGCN ✅ / DCRNN ✅ / GWNET ✅ / STGODE ✅（代码就绪，待用户运行）
-- [ ] **Phase 3**：TimeAlign → ProtoTS → ModernTCN（已重新规划，待开发）
+- [x] **Phase 3**：TimeAlign ✅ / ProtoTS ✅ / ModernTCN ✅（代码就绪，待用户运行）
 - [ ] **Phase 4-5**：待开始

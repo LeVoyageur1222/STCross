@@ -206,6 +206,19 @@ python experiments/run_all.py --models ProtoTS --settings all \
 > **自定义 fit()**：使用 L1 loss + 熵正则化（稀疏原型激活）
 > Channel-independent → 天然支持跨城市迁移，无需邻接矩阵。
 
+### ModernTCN ✅ 已就绪
+
+```bash
+python experiments/run_all.py --models ModernTCN --settings all \
+    --epochs 100 --batch_size 64 --lr 1e-3
+```
+
+> 预计 GPU 单次训练 ~3-5 min，4 设置合计 ~12-20 min。
+> 模型结构（忠实 luodhhh/ModernTCN CI 模式）：Patching → 2 × ModernTCNBlock(DWConv k=5 + ConvFFN d→2d→d + LN + residual) → Flatten → Linear head
+> 默认 d_model=64, d_ff=128, kernel=5, ~39K 参数
+> 使用标准 Trainer（MSE loss），无需自定义 fit。
+> Channel-independent → 天然支持跨城市迁移，无需邻接矩阵。
+
 ---
 
 ## 完成一个模型后的流程
@@ -233,6 +246,7 @@ python experiments/run_all.py --models ProtoTS --settings all \
 | Group B | STGODE | ~20-40 min | ~80-160 min |
 | Group C | TimeAlign | ~5-10 min | ~20-40 min |
 | Group C | ProtoTS | ~3-5 min | ~12-20 min |
+| Group C | ModernTCN | ~3-5 min | ~12-20 min |
 
 > 以上为粗略估算，实际取决于 early stopping 触发时间。
 > Group B 模型因涉及图卷积 + 全节点输入 (batch, H, N)，显存/内存占用更大。
