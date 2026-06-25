@@ -210,16 +210,29 @@
 > **性能说明**：DCRNN 是 Seq2Seq 架构（24 个顺序 RNN 步），MPS 单 batch (B=16, N=585) ~9s。预计单次训练 ~4-8 小时 (MPS)，建议用 GPU 服务器或减少 epochs。
 > **跨城市迁移**：扩散卷积权重 (num_supports × C_in, C_out) 与 N 无关，支撑矩阵在 registry 中自动为 target 城市重建。
 
-### 2.3 GWNET
+### 2.3 GWNET ✅ 代码就绪，待用户运行
 
-> 文件：`model/gwnet.py` | 实现方式：适配开源
+> 文件：`model/gwnet.py` | 实现方式：基于 nnzhan/Graph-WaveNet 忠实复现
 > 代码源：https://github.com/nnzhan/Graph-WaveNet
 
-- [ ] 扩散卷积 + WaveNet + 自适应邻接（可配置 adaptive=True/False）
-- [ ] 继承 `TorchModel`，`input_mode="all_nodes"`
-- [ ] 注册到 `model/registry.py`
-- [ ] **用户运行**：`python experiments/run_all.py --models GWNET --settings all`
+- [x] 核心模块（忠实还原原始架构）：
+  - `asym_adj()`: 行归一化邻接矩阵 (random walk transition matrix)
+  - `NConv`: 图卷积 via einsum `bcnt,nm->bcmt`
+  - `MixProp`: Mix-hop propagation — 拼接 [x, Ax, A²x, ...] 对每个 support 矩阵，线性混合
+  - Dilated Causal Convolution: Conv2d(kernel=(1,2)) with dilation=[1,2]×4 blocks → receptive field=13
+  - Gated TCN: tanh(filter_conv) ⊙ sigmoid(gate_conv)
+  - Adaptive Adjacency: learnable E₁(N,10) @ E₂(10,N) → softmax(ReLU(·))
+  - Skip connections: 每层 skip 累加，最终 ReLU → end_conv1 → ReLU → end_conv2
+  - 默认配置：residual_ch=32, dilation_ch=32, skip_ch=128, end_ch=256, blocks=4, layers=2, order=2, dropout=0.3
+- [x] 继承 `TorchModel`，`input_mode="all_nodes"`
+- [x] 构造函数接受 `adj` 邻接矩阵，支撑矩阵 (forward + backward RW) 注册为 buffer
+- [x] 注册到 `model/registry.py`
+- [x] Smoke test 通过（合成数据 forward+backward 正确，NYC/CHI 尺寸验证）
+- [ ] **用户运行**：`python experiments/run_all.py --models GWNET --settings all --epochs 100 --batch_size 32 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
+
+> **参数量**：~170K (N-independent) + 自适应邻接 (NYC: +16K, CHI: +12K)
+> **跨城市迁移**：MixProp 权重与 N 无关，自适应邻接 E₁/E₂ 为 N-dependent 但会随 target 城市重建。固定 supports 在 registry 中自动加载 target 城市邻接。
 
 ### 2.4 STGODE
 

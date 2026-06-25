@@ -154,12 +154,18 @@ python experiments/run_all.py --models DCRNN --settings all \
 > 默认 hidden_dim=64, K=2 (双向随机游走, 6 个支撑矩阵), num_layers=2
 > 邻接矩阵自动从 `data/processed_data/adjacency/` 加载。
 
-### GWNET
+### GWNET ✅ 已就绪
 
 ```bash
 python experiments/run_all.py --models GWNET --settings all \
     --epochs 100 --batch_size 32 --lr 1e-3
 ```
+
+> 预计 GPU 单次训练 ~15-30 min，4 设置合计 ~60-120 min。
+> 模型结构（忠实 nnzhan/Graph-WaveNet 版本）：Dilated Causal Conv(dilation=[1,2]×4 blocks) → Gated TCN(tanh⊙sigmoid) → MixProp Graph Conv(order=2, 3 supports) → Skip + Residual → FC
+> 默认 residual_ch=32, skip_ch=128, end_ch=256, blocks=4, layers=2, receptive_field=13
+> 支撑矩阵：forward + backward random walk + 自适应邻接 (learnable E₁@E₂)
+> 邻接矩阵自动从 `data/processed_data/adjacency/` 加载。
 
 ### STGODE
 
@@ -191,7 +197,7 @@ python experiments/run_all.py --models STGODE --settings all \
 | Group A | TimesNet | ~15-30 min | ~60-120 min |
 | Group B | STGCN | ~15-30 min | ~60-120 min |
 | Group B | DCRNN | ~20-40 min | ~80-160 min |
-| Group B | GWNET | ~20-40 min | ~80-160 min |
+| Group B | GWNET | ~15-30 min | ~60-120 min |
 | Group B | STGODE | ~20-40 min | ~80-160 min |
 
 > 以上为粗略估算，实际取决于 early stopping 触发时间。
