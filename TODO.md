@@ -3,7 +3,7 @@
 > 本文件为 STCross 项目的实验主规划，所有后续实验开发均以此为准。
 > 相关文档：[运行指南](RUN_GUIDE.md) | [结果汇总](results/RESULTS.md)
 >
-> 最后更新：2026-06-24（Phase 0 完成 + 代码质量审查修复）
+> 最后更新：2026-06-25（Phase 2 全部完成 + Phase 3 重新规划）
 
 ---
 
@@ -260,45 +260,88 @@
 
 ---
 
-## Phase 3：Group C Baselines（事件感知方法）
+## Phase 3：Group C Baselines（分布鲁棒/可迁移方法）
 
-> **依赖**：Phase 0 ✅，部分依赖代码开源情况
+> **目标**：完成针对分布偏移鲁棒的方法，每个模型完成后立即运行 4 种实验设置。
+> **依赖**：Phase 0 ✅
 > **可与 Phase 1-2 穿插推进**
+>
+> **主题调整说明**：原 Group C 定位为"事件感知方法"（ST-Norm / ConFormer / STEVE），
+> 但经细致考察发现 **三者均包含 N-dependent 可学习参数**（per-node 归一化系数 / 节点嵌入 / 自适应邻接），
+> 无法直接用于跨城市迁移（source 城市 N₁ ≠ target 城市 N₂ 时参数维度不匹配）。
+> 进一步排查 ST01(TGDL)、ST07(HyperD)、ST10(IGSTGNN) 等候选，均存在同样问题。
+>
+> 因此将 Group C 重新定义为 **"分布鲁棒/可迁移方法"**，理由：
+> 1. 跨城市迁移本质上是分布偏移问题（源城市分布 → 目标城市分布）
+> 2. 异常时段（节假日/极端天气）也是相对正常模式的分布偏移
+> 3. 该组方法从时序层面显式处理分布不匹配，与 Group A（基础时序）、Group B（时空图）形成互补
+>
+> **N-dependent 排查汇总**：
+>
+> | 原候选 | N-dependent 组件 | 可迁移性 |
+> |--------|-----------------|---------|
+> | ST-Norm | SN 模块 per-node γ/β | ✗ |
+> | ConFormer (ST11) | NodeEmb(N,d), AdaptiveAdj(N,10)×(10,N) | ✗ |
+> | STEVE (ST13) | NodeEmb, confounder bank, spatial SSL | ✗ |
+> | HyperD (ST07) | 周期嵌入 P_D(288,N), P_W(2016,N) | ✗ |
+> | TGDL (ST01) | 子图掩码 K×N×N | ✗ |
+> | IGSTGNN (ST10) | 自适应节点嵌入 E₁(N,d), E₂(N,d) | ✗ |
+> | **TimeAlign (ST05)** | **无** — CI linear | **✓** |
+> | **ProtoTS (ST06)** | **无** — shared prototypes | **✓** |
+> | **ModernTCN** | **无** — CI DWConv | **✓** |
 
-### 3.1 ST-Norm
+### 3.1 TimeAlign (ST05) ✅ 代码就绪，待用户运行
 
-> 代码源：https://github.com/JLDeng/ST-Norm
+> 论文：*Bridging Past and Future: Distribution-Aware Alignment for Time Series Forecasting* (ICLR 2026)
+> 代码源：https://github.com/TROUBADOUR000/TimeAlign
+
+- [x] 核心模块（忠实还原原始架构）：
+  - `PatchEncoder`: Patching(patch_len=4, stride=2, 5 patches) → Linear embed → M 层 (Linear-GELU-Linear + residual)
+  - Predict Branch: PatchEncoder(history) → Linear head → (B, P, 1)
+  - Reconstruct Branch (仅训练): PatchEncoder(future) → Linear head → (B, P)，重建分支 stop-gradient
+  - Local Alignment: patch 级余弦相似度 + margin δ_loc + GELU 软阈值
+  - Global Alignment: 距离矩阵匹配 |D_x - D_y| + margin δ_glo + GELU
+  - Dynamic Weighting: α/β 自适应平衡 local/global 损失
+  - 总损失: L_pred + L_recon + λ · L_align
+  - 默认配置: d_model=64, n_layers=2, patch_len=4, stride=2, λ=1.0, δ_loc=0.1, δ_glo=0.1
+- [x] 继承 `TorchModel`，`input_mode="per_node"`
+- [x] 自定义 `fit()` 方法（重建分支需要训练时访问 Y）
+- [x] 注册到 `model/registry.py`
+- [x] Smoke test 通过（inference + training forward + backward 正确）
+- [ ] **用户运行**：`python experiments/run_all.py --models TimeAlign --settings all --epochs 100 --batch_size 64 --lr 1e-3`
+- [ ] 结果收集 → 更新 RESULTS.md
+
+> **参数量**：~50K (N-independent)，所有参数为共享 Linear 层，天然支持跨城市迁移
+> **特色**：重建分支保留高频突变信号（对异常客流预测关键），对齐机制处理 train/test 分布不匹配
+
+### 3.2 ProtoTS (ST06)
+
+> 论文：*ProtoTS: Hierarchical Prototypes for Explainable Time Series Forecasting* (ICLR 2026)
+> 代码源：https://github.com/SKURA502/ProtoTS
 
 - [ ] 获取代码，评估适配难度
-- [ ] 选择 backbone + 适配
+- [ ] 核心机制：层次原型学习 + 可解释预测
+  - 全局共享原型库（不绑定特定节点）→ N-independent
+  - 可自然学习正常/异常时间模式的不同原型
+  - Multi-channel 处理中每个 channel 使用共享投影层
+- [ ] 适配到 `TorchModel`，`input_mode="per_node"`
+- [ ] 注册到 `model/registry.py`
 - [ ] **用户运行**：同城 + 跨城市 4 设置
 - [ ] 结果收集 → 更新 RESULTS.md
 
-### 3.2 ConFormer (ST11)
+### 3.3 ModernTCN
 
-> 代码源：https://github.com/Dreamzz5/ConFormer ✅ 已确认对应
-> 论文：*Towards Resilient Transportation: A Conditional Transformer for Accident-Informed Traffic Forecasting* (KDD 2026)
+> 论文：*ModernTCN: A Modern Pure Convolution Structure for General Time Series Analysis* (ICLR 2024 Spotlight, 分数 8/8/8)
+> 代码源：https://github.com/luodhhh/ModernTCN
 
-- [x] 代码仓库核对：README 确认为 Conditional Transformer + Guided Layer Normalization (GLN)，KDD 2026
-- [x] 跨城市适配性评估：**存在 N-dependent 参数**
-  - Node Embedding `(N, d)`、Adaptive Adjacency `(N, 10)×(10, N)`、precomputed adj `(N, N)`、output reshape 硬编码 `num_nodes`
-  - 同城评测可直接使用，跨城市需去除或重初始化 node embedding + 替换 adj
-- [ ] 数据格式适配：原始格式为 `data.npz (T, N, C)` + `adj.npy`，需转换我们的 `(T, N)` flow + corr adj
-- [ ] 适配到框架 + 注册
-- [ ] **用户运行**：同城 + 跨城市 4 设置
-- [ ] 结果收集 → 更新 RESULTS.md
-
-### 3.3 STEVE (ST13)
-
-> 代码源：https://github.com/bigscity/STEVE_CODE ✅ 已确认对应
-> 论文：*Seeing the Unseen: Learning Basis Confounder Representations for Robust Traffic Prediction* (KDD 2025)
-
-- [x] 代码仓库核对：README 确认为 STEVE (Spatial-Temporal sElf-superVised confoundEr learning)，KDD 2025
-- [x] 跨城市适配性评估：**存在 N-dependent 参数**
-  - GNN backbone、node embeddings、graph-tied basis confounder bank、spatial self-supervised task
-  - 同城评测可直接使用，跨城市需解耦 confounder learning 与 city-specific spatial 组件
-- [ ] 数据格式适配：原始格式为 HDF5 + adjacency pickle（LibCity 生态），需转换
-- [ ] 适配到框架 + 注册
+- [ ] 获取代码，评估适配难度
+- [ ] 核心机制：现代纯卷积架构
+  - DWConv (大 kernel Depthwise Convolution) + ConvFFN + 残差
+  - Channel-independent 模式 → 所有参数 N-independent
+  - 代表"纯卷积挑战 Transformer"的最新范式
+  - 在 5 类时序分析任务上达到一致 SOTA
+- [ ] 适配到 `TorchModel`，`input_mode="per_node"`
+- [ ] 注册到 `model/registry.py`
 - [ ] **用户运行**：同城 + 跨城市 4 设置
 - [ ] 结果收集 → 更新 RESULTS.md
 
@@ -378,6 +421,7 @@ Phase 0 ✅
 
 - [x] **Phase 0**：全部完成（基础设施 + 代码质量审查 + 修复）
 - [x] **HA**：全量评测完成
-- [ ] **Phase 1**：LSTM → DLinear → PatchTST → TimesNet（待开发）
-- [ ] **Phase 2**：STGCN → DCRNN → GWNET → STGODE（待开发）
-- [ ] **Phase 3-5**：待开始
+- [x] **Phase 1**：LSTM ✅ / DLinear ✅ / PatchTST ✅ / TimesNet ✅（代码就绪，待用户运行）
+- [x] **Phase 2**：STGCN ✅ / DCRNN ✅ / GWNET ✅ / STGODE ✅（代码就绪，待用户运行）
+- [ ] **Phase 3**：TimeAlign → ProtoTS → ModernTCN（已重新规划，待开发）
+- [ ] **Phase 4-5**：待开始

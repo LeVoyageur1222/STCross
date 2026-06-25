@@ -180,6 +180,19 @@ python experiments/run_all.py --models STGODE --settings all \
 > 默认 d_model=64, ode_time=6.0, step_size=1.0, 418K 参数（N-independent）
 > 邻接矩阵自动从 `data/processed_data/adjacency/` 加载，GCN 归一化（对称 + self-loop）。
 
+### TimeAlign ✅ 已就绪
+
+```bash
+python experiments/run_all.py --models TimeAlign --settings all \
+    --epochs 100 --batch_size 64 --lr 1e-3
+```
+
+> 预计 GPU 单次训练 ~5-10 min，4 设置合计 ~20-40 min。
+> 模型结构（忠实 TROUBADOUR000/TimeAlign）：Predict Branch(Patching→2 层 Linear encoder→head) + Reconstruct Branch(训练时, stop-gradient) + Distribution-Aware Alignment(local cosine + global distance matrix + dynamic weighting)
+> 默认 d_model=64, n_layers=2, patch_len=4, stride=2, λ_align=1.0, ~50K 参数
+> **自定义 fit()**：重建分支需要训练时访问 Y，因此使用自定义训练循环（含完整 early stopping / scheduler / checkpoint）
+> Channel-independent → 天然支持跨城市迁移，无需邻接矩阵。
+
 ---
 
 ## 完成一个模型后的流程
@@ -205,6 +218,7 @@ python experiments/run_all.py --models STGODE --settings all \
 | Group B | DCRNN | ~20-40 min | ~80-160 min |
 | Group B | GWNET | ~15-30 min | ~60-120 min |
 | Group B | STGODE | ~20-40 min | ~80-160 min |
+| Group C | TimeAlign | ~5-10 min | ~20-40 min |
 
 > 以上为粗略估算，实际取决于 early stopping 触发时间。
 > Group B 模型因涉及图卷积 + 全节点输入 (batch, H, N)，显存/内存占用更大。

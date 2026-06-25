@@ -112,3 +112,12 @@ def build_stgode(config: EvalConfig, train_config: TrainConfig):
         H=config.history_len, P=config.predict_len,
         train_config=train_config,
     )
+
+
+@register("TimeAlign")
+def build_timealign(config: EvalConfig, train_config: TrainConfig):
+    from model.timealign import TimeAlignModel
+    return TimeAlignModel(
+        H=config.history_len, P=config.predict_len,
+        train_config=train_config,
+    )
