@@ -380,25 +380,30 @@
 > 3. 有开源代码且仓库含实际代码内容 ✓
 > 4. 经典论文 + 顶会发表 ✓
 
-### 4.1 EVL（Modeling Extreme Events in Time Series Prediction）
+### 4.1 EVL（Modeling Extreme Events in Time Series Prediction） ✅ 代码就绪，待用户运行
 
 > 论文：*Modeling Extreme Events in Time Series Prediction* (KDD 2019) — **经典奠基性工作**
 > 代码源：https://github.com/HuiqunHuang/EVL
 
-- [ ] 获取代码，评估适配难度
-- [ ] 核心机制：Extreme Value Loss + Memory Network
-  - **EVL 损失函数**：基于极值理论 (EVT)，用 BCE 形式预测极值点，加入尾部权重 `(1-u/γ)^γ`
-    - 解决欠拟合（MSE 的高斯核无法恢复厚尾）和过拟合（简单加权扭曲正常区域）
-  - **Memory Network**：存储历史极端事件模式原型，通过注意力机制融合记忆
-  - 总损失：L_main (MSE) + λ · L_EVL (极值二分类) + Memory attention loss
-  - EVL 是 loss 级增强，可叠加到任意 backbone → 极高通用性
-- [ ] 适配到 `TorchModel`，`input_mode="per_node"`（EVL 作为自定义损失 + Memory 模块）
-- [ ] 注册到 `model/registry.py`
+- [x] 核心模块（忠实还原原始架构）：
+  - `ExtremeValueLoss`: 基于 EVT 的损失函数，尾部权重 `(1-u/γ)^γ`，γ=3，自动类平衡 β0/β1
+  - `MemoryNetwork`: 存储 M=16 个极端事件模式原型，attention-based 检索
+  - LSTM backbone: 2 层 LSTM (hidden=64, dropout=0.1)
+  - Prediction head: concat(h, memory_out) → FC → ŷ (regression)
+  - Extreme classifier: concat(h, memory_out) → FC → sigmoid → P(extreme)
+  - 极端标签自动生成：|y| > 90th percentile → extreme=1
+  - 总损失：MSE(ŷ, y) + λ · EVL(P(extreme), extreme_label)
+  - 默认配置：hidden=64, mem_size=16, λ_evl=0.1, γ=3.0, extreme_pct=90
+- [x] 继承 `TorchModel`，`input_mode="per_node"`
+- [x] 自定义 `fit()` 方法（dual loss: MSE + EVL）
+- [x] 注册到 `model/registry.py`
+- [x] Smoke test 通过（EVL loss + encode + predict + memory + backward 正确）
 - [ ] **用户运行**：`python experiments/run_all.py --models EVL --settings all --epochs 100 --batch_size 64 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
 
-> **参数量**：取决于 backbone + Memory 大小，预计 ~50-100K (N-independent)
-> **经典性**：首篇系统研究 DL 极端事件预测失败原因的工作，后续 EALGAP/SR-MTL/DAN 均引用
+> **参数量**：~74K (N-independent)，LSTM + Memory + dual heads
+> **经典性**：首篇系统研究 DL 极端事件预测失败原因的工作（KDD 2019），EVL 损失被后续多篇论文引用
+> **EVL 核心洞察**：MSE 等价于高斯核密度估计→尾部指数衰减→无法恢复厚尾→极值欠拟合；EVL 通过 EVT 尾部权重修正此问题
 
 ### 4.2 EALGAP（Extreme-Aware Local-Global Attention）
 

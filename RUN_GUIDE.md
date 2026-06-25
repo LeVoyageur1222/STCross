@@ -219,6 +219,20 @@ python experiments/run_all.py --models ModernTCN --settings all \
 > 使用标准 Trainer（MSE loss），无需自定义 fit。
 > Channel-independent → 天然支持跨城市迁移，无需邻接矩阵。
 
+### EVL ✅ 已就绪
+
+```bash
+python experiments/run_all.py --models EVL --settings all \
+    --epochs 100 --batch_size 64 --lr 1e-3
+```
+
+> 预计 GPU 单次训练 ~5-10 min，4 设置合计 ~20-40 min。
+> 模型结构（忠实 HuiqunHuang/EVL）：2 层 LSTM encoder → Memory Network(16 slots, attention retrieval) → dual heads (regression + extreme classifier)
+> 默认 hidden=64, mem_size=16, λ_evl=0.1, γ=3.0, ~74K 参数
+> **自定义 fit()**：dual loss = MSE(prediction) + λ·EVL(extreme classification)
+> 极端标签自动生成：|y| > 90th percentile
+> Channel-independent → 天然支持跨城市迁移，无需邻接矩阵。
+
 ---
 
 ## 完成一个模型后的流程
@@ -247,6 +261,7 @@ python experiments/run_all.py --models ModernTCN --settings all \
 | Group C | TimeAlign | ~5-10 min | ~20-40 min |
 | Group C | ProtoTS | ~3-5 min | ~12-20 min |
 | Group C | ModernTCN | ~3-5 min | ~12-20 min |
+| Group D | EVL | ~5-10 min | ~20-40 min |
 
 > 以上为粗略估算，实际取决于 early stopping 触发时间。
 > Group B 模型因涉及图卷积 + 全节点输入 (batch, H, N)，显存/内存占用更大。
