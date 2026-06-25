@@ -3,7 +3,7 @@
 > 本文件为 STCross 项目的实验主规划，所有后续实验开发均以此为准。
 > 相关文档：[运行指南](RUN_GUIDE.md) | [结果汇总](results/RESULTS.md)
 >
-> 最后更新：2026-06-25（Phase 1-4 完成 + 代码审查修复完成）
+> 最后更新：2026-06-25（Phase 1-4 完成 + 代码审查修复完成 + Phase 2 废弃）
 
 ---
 
@@ -87,6 +87,11 @@
 - [x] P0（6 项）：跨城市 scaler 重构、异常标签 `>=`、PCC 零方差防护、forward shape 断言、空 loader 除零、指标空数组检查
 - [x] P1（10 项）：消除 hasattr、近零 std 防护、邻接确定性、checkpoint 检查、skip config 校验、共享 registry、错误隔离、种子、input_mode 校验、梯度裁剪可配置
 - [x] P2（3 项）：pin_memory 条件启用、邻接向量化、训练/评估合并
+
+### 训练循环重构 ✅
+- [x] 提取 `TrainingLoop` 公共类 (`train/trainer.py`)，统一标准 Trainer 和 5 个自定义 fit 模型的训练循环逻辑
+- [x] 消除 EVL/TimeAlign/ProtoTS/DAN/STSSDL 中 ~50 行重复的 epoch 循环/早停/checkpoint 模板代码
+- [x] 自定义 fit 只需提供 `train_step_fn` 和 `val_step_fn` 回调
 
 ### Baseline 代码忠实度审查修复 ✅ (15 模型全覆盖)
 - [x] P0（4 模型重点修复）：
@@ -173,106 +178,48 @@
 
 ---
 
-## Phase 2：Group B Baselines（时空图方法）
+## Phase 2：Group B Baselines（时空图方法）— 已废弃（跨城市 N 不匹配）
 
-> **目标**：完成 STGNN 方法，每个模型完成后立即运行 4 种实验设置。
+> **废弃原因**：经验证 NYC(820节点) ≠ CHI(585节点)，所有 Group B 模型（STGCN/DCRNN/GWNET/STGODE）在交叉城市实验中因 einsum 维度不匹配而崩溃。由于这些模型包含 N-dependent 的邻接矩阵 buffer（非可学习参数，但仍需与输入 N 匹配），无法直接用于跨城市迁移。已从 registry 中移除。
+> 
+> **验证日期**：2026-06-25
+> **验证结果**：
+> - STGCN: `einsum(): subscript m has size 585 for operand 1 which does not broadcast with previously seen size 820`
+> - DCRNN: `einsum(): subscript m has size 585 for operand 1 which does not broadcast with previously seen size 820`
+> - GWNET: `einsum(): subscript n has size 820 for operand 1 which does not broadcast with previously seen size 585`
+> - STGODE: `Expected size for first two dimensions of batch2 tensor to be: [24, 820] but got [24, 585]`
+
 > **依赖**：Phase 0 ✅（邻接矩阵已构建）
 > **可与 Phase 1 并行推进**
 
 ### 2.0 邻接矩阵 ✅
 
-- [x] `adj_NYC_corr_k10.npy` (820×820, 9608 edges)
-- [x] `adj_CHI_corr_k10.npy` (585×585, 9696 edges)
+- [x] ~~`adj_NYC_corr_k10.npy` (820×820, 9608 edges)~~
+- [x] ~~`adj_CHI_corr_k10.npy` (585×585, 9696 edges)~~
 
-### 2.1 STGCN ✅ 代码就绪，待用户运行
+### 2.1 STGCN ~~已废弃~~
 
-> 文件：`model/stgcn.py` | 实现方式：基于 hazdzz/STGCN PyTorch 版本忠实复现
+> ~~文件：`model/stgcn.py` | 实现方式：基于 hazdzz/STGCN PyTorch 版本忠实复现~~
+> 
+> 已废弃：交叉城市实验中因 `einsum` 维度不匹配而崩溃。邻接矩阵 buffer 为 N-dependent，无法用于跨城市迁移。
 
-- [x] 核心模块（忠实还原 hazdzz benchmark 版本）：
-  - `scaled_laplacian()`: 计算实际 λ_max → L̃ = 2L_sym/λ_max - I
-  - `ChebGraphConv`: K 阶 Chebyshev 多项式递推 T_0=I, T_1=L̃, T_k=2L̃T_{k-1}-T_{k-2}，可学习权重 (K, C_in, C_out)
-  - `TemporalConvLayer`: Conv2d(kernel=(1,Kt)) + GLU 门控 (split + sigmoid)
-  - `GraphConvLayer`: 1×1 align + ChebConv + residual + ReLU
-  - `STConvBlock`: TemporalConv(c_in→c_hid) → GraphConv(c_hid→c_hid) → TemporalConv(c_hid→c_out) → LayerNorm + Dropout
-  - `OutputLayer`: TemporalConv(Ko→1) → LayerNorm → TemporalConv(1) → FC(C→P)
-  - 张量布局：(B, C, N, T)
-  - 默认配置：blocks=[[1,16,64],[64,16,64]], Ks=3, Kt=3, Ko=H-8=4, ~82K 参数
-- [x] 继承 `TorchModel`，`input_mode="all_nodes"`
-- [x] 构造函数接受 `adj` 邻接矩阵，注册时自动从 `config.adj_path()` 加载
-- [x] 注册到 `model/registry.py`
-- [x] Smoke test 通过（合成数据 MPS + 真实 CHI 数据完整 evaluator 流程）
-- [ ] **用户运行**：`python experiments/run_all.py --models STGCN --settings all --epochs 100 --batch_size 32 --lr 1e-3`
-- [ ] 结果收集 → 更新 RESULTS.md
+### 2.2 DCRNN ~~已废弃~~
 
-> **跨城市迁移**：图卷积核权重 (K, C_in, C_out) 与 N 无关，跨城市时 registry 自动加载 target 城市邻接矩阵。
+> ~~文件：`model/dcrnn.py` | 实现方式：基于 liyaguang/DCRNN (TF) + chnsh/DCRNN_PyTorch 忠实复现~~
+> 
+> 已废弃：交叉城市实验中因 `einsum` 维度不匹配而崩溃。邻接矩阵 buffer 为 N-dependent，无法用于跨城市迁移。
 
-### 2.2 DCRNN ✅ 代码就绪，待用户运行
+### 2.3 GWNET ~~已废弃~~
 
-> 文件：`model/dcrnn.py` | 实现方式：基于 liyaguang/DCRNN (TF) + chnsh/DCRNN_PyTorch 忠实复现
+> ~~文件：`model/gwnet.py` | 实现方式：基于 nnzhan/Graph-WaveNet 忠实复现~~
+> 
+> 已废弃：交叉城市实验中因 `einsum` 维度不匹配而崩溃。邻接矩阵 buffer 为 N-dependent，无法用于跨城市迁移。
 
-- [x] 核心模块（忠实还原原始架构）：
-  - `build_supports()`: 从邻接矩阵计算 dual random walk 支撑矩阵 (forward + backward, K-hop powers)，共 2×(K+1) 个
-  - `DiffusionConv`: Σ_k θ_k · P^k · X，所有支撑矩阵拼接后线性变换
-  - `DCGRUCell`: GRU 三个门 (reset, update, candidate) 全部用 DiffusionConv 替代线性变换
-  - `DCRNNEncoder`: L 层 DCGRU 堆叠，逐步处理 T 个时间步
-  - `DCRNNDecoder`: L 层 DCGRU + Linear projection，自回归生成 P 步预测
-  - 默认配置：hidden_dim=64, num_layers=2, K=2 (6 个支撑矩阵), 445K 参数
-- [x] 继承 `TorchModel`，`input_mode="all_nodes"`
-- [x] 注册到 `model/registry.py`，自动加载 target 城市邻接矩阵
-- [x] Smoke test 通过（合成数据 MPS，forward+backward 正确）
-- [ ] **用户运行**：`python experiments/run_all.py --models DCRNN --settings all --epochs 100 --batch_size 32 --lr 1e-3`
-- [ ] 结果收集 → 更新 RESULTS.md
+### 2.4 STGODE ~~已废弃~~
 
-> **性能说明**：DCRNN 是 Seq2Seq 架构（24 个顺序 RNN 步），MPS 单 batch (B=16, N=585) ~9s。预计单次训练 ~4-8 小时 (MPS)，建议用 GPU 服务器或减少 epochs。
-> **跨城市迁移**：扩散卷积权重 (num_supports × C_in, C_out) 与 N 无关，支撑矩阵在 registry 中自动为 target 城市重建。
-
-### 2.3 GWNET ✅ 代码就绪，待用户运行
-
-> 文件：`model/gwnet.py` | 实现方式：基于 nnzhan/Graph-WaveNet 忠实复现
-> 代码源：https://github.com/nnzhan/Graph-WaveNet
-
-- [x] 核心模块（忠实还原原始架构）：
-  - `asym_adj()`: 行归一化邻接矩阵 (random walk transition matrix)
-  - `NConv`: 图卷积 via einsum `bcnt,nm->bcmt`
-  - `MixProp`: Mix-hop propagation — 拼接 [x, Ax, A²x, ...] 对每个 support 矩阵，线性混合
-  - Dilated Causal Convolution: Conv2d(kernel=(1,2)) with dilation=[1,2]×4 blocks → receptive field=13
-  - Gated TCN: tanh(filter_conv) ⊙ sigmoid(gate_conv)
-  - Adaptive Adjacency: learnable E₁(N,10) @ E₂(10,N) → softmax(ReLU(·))
-  - Skip connections: 每层 skip 累加，最终 ReLU → end_conv1 → ReLU → end_conv2
-  - 默认配置：residual_ch=32, dilation_ch=32, skip_ch=256, end_ch=512, blocks=4, layers=2, order=2, dropout=0.3
-- [x] 继承 `TorchModel`，`input_mode="all_nodes"`
-- [x] 构造函数接受 `adj` 邻接矩阵，支撑矩阵 (forward + backward RW) 注册为 buffer
-- [x] 注册到 `model/registry.py`
-- [x] Smoke test 通过（合成数据 forward+backward 正确，NYC/CHI 尺寸验证）
-- [ ] **用户运行**：`python experiments/run_all.py --models GWNET --settings all --epochs 100 --batch_size 32 --lr 1e-3`
-- [ ] 结果收集 → 更新 RESULTS.md
-
-> **参数量**：~306K (N-independent) + 自适应邻接 (NYC: +16K, CHI: +12K)
-> **跨城市迁移**：MixProp 权重与 N 无关，自适应邻接 E₁/E₂ 为 N-dependent 但会随 target 城市重建。固定 supports 在 registry 中自动加载 target 城市邻接。
-
-### 2.4 STGODE ✅ 代码就绪，待用户运行
-
-> 文件：`model/stgode.py` | 实现方式：基于 square-coder/STGODE 忠实复现
-> 代码源：https://github.com/square-coder/STGODE
-
-- [x] 核心模块（忠实还原原始架构）：
-  - `gcn_norm_adj()`: GCN 对称归一化 + self-loop (D̃^{-1/2} Ã D̃^{-1/2})
-  - `ODEFunc`: ODE 动力学函数 f(H,A) = A·H·W + H⊙d (W 初始化为 I, d 初始化为 1)
-  - `ODEG`: Euler 方法 ODE 图演化, 6 步积分 (ode_time=6.0, step_size=1.0)
-  - `TemporalConv`: 双层 TCN (CausalConv1d, kernel=3, dilation=[1,2]) + residual
-  - 双 ODEG 分支 (spatial + semantic)，独立权重，共享邻接
-  - 输出：Concat(2×d_model) → Flatten(H×2C) → FC(256) → FC(P)
-  - 默认配置：d_model=64, ode_time=6.0, step_size=1.0, dropout=0.1
-- [x] 继承 `TorchModel`，`input_mode="all_nodes"`
-- [x] 构造函数接受 `adj` 邻接矩阵，GCN 归一化后注册为 buffer
-- [x] 注册到 `model/registry.py`
-- [x] Smoke test 通过（合成数据 forward+backward 正确，NYC/CHI 尺寸验证）
-- [ ] **用户运行**：`python experiments/run_all.py --models STGODE --settings all --epochs 100 --batch_size 32 --lr 1e-3`
-- [ ] 结果收集 → 更新 RESULTS.md
-
-> **参数量**：~418K (N-independent), buffer: NYC 2.7MB, CHI 1.4MB
-> **跨城市迁移**：所有可学习参数 (W, d, TCN, FC) 均与 N 无关，仅邻接 buffer 随 target 城市变化。
-> **原始论文使用双邻接**：A_sp (空间) + A_se (语义/DTW)。本实现使用相同的 correlation 邻接但独立 ODE 动力学权重，两个分支学习不同空间模式。
+> ~~文件：`model/stgode.py` | 实现方式：基于 square-coder/STGODE 忠实复现~~
+> 
+> 已废弃：交叉城市实验中因前两维维度不匹配而崩溃。邻接矩阵 buffer 为 N-dependent，无法用于跨城市迁移。
 
 ---
 
@@ -416,6 +363,7 @@
 - [x] 自定义 `fit()` 方法（dual loss: MSE + EVL）
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（EVL loss + encode + predict + memory + backward 正确）
+- [x] **L16 修复**：EVL 改为使用所有 LSTM 输出的均值（`mean(dim=1)`）替代仅使用最后一层隐藏状态，保留完整时序信息
 - [ ] **用户运行**：`python experiments/run_all.py --models EVL --settings all --epochs 100 --batch_size 64 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
 
@@ -423,13 +371,13 @@
 > **经典性**：首篇系统研究 DL 极端事件预测失败原因的工作（KDD 2019），EVL 损失被后续多篇论文引用
 > **EVL 核心洞察**：MSE 等价于高斯核密度估计→尾部指数衰减→无法恢复厚尾→极值欠拟合；EVL 通过 EVT 尾部权重修正此问题
 
-### 4.2 EALGAP（Extreme-Aware Local-Global Attention） ✅ 代码就绪，待用户运行
+### 4.2 EALGAP（Extreme-Aware Local-Global Attention） ✅ 代码修复完成，待用户运行
 
 > 论文：*Extreme-Aware Local-Global Attention for Spatio-Temporal Urban Mobility Learning* (ICDE 2023)
 > 代码源：https://github.com/HuiqunHuang/EALGAP
 
 - [x] 核心模块（基于参考代码 HuiqunHuang/EALGAP 忠实复现）：
-  - `GlobalTrendModule`: 在线计算指数分布 PDF(λ=1/mean|x|) → concat(x, pdf) 嵌入 → MLP decoder(Dense→softmax→Dense→softmax) 生成数据依赖 Q/K/V → Multi-Head SA(4 heads) → LayerNorm + residual → FC → 全局趋势预测
+  - `GlobalTrendModule`: 在线计算指数分布 PDF(λ=1/mean|x|) → concat(x, pdf) 嵌入 → MLP decoder(Dense→GELU→Dense→Softmax) 生成数据依赖 Q/K/V → Multi-Head SA(4 heads) → LayerNorm + residual → FC → 全局趋势预测
   - `LocalExtremeModule`: 实例 z-score 归一化 → learnable γ scaling → tanh 边界化到[-1,1] → GRU → tanh 输出 → FC → 局部极端度预测
   - 最终融合（乘法调制）: output = ReLU(global_pred × (1 + extreme_degree))
   - 默认配置：d_model=64, n_heads=4, gru_hidden=32
@@ -437,27 +385,30 @@
 - [x] 使用标准 `Trainer`（MSE loss），无需自定义 fit
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（PDF Q/K/V + z-score tanh + 乘法融合 + backward 正确）
+- [x] **代码修复**：QKV MLP decoder 中间层 Softmax→GELU（Softmax 不适合特征变换，GELU 提供非饱和平滑激活）；文档化两处近似（PDF 按 batch 动态计算替代论文预计算值；实例 z-score 替代论文同槽位历史统计）
 - [ ] **用户运行**：`python experiments/run_all.py --models EALGAP --settings all --epochs 100 --batch_size 64 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
 
 > **参数量**：~244K (N-independent)，SA + MLP decoder + GRU + FC 全共享
 > **直接相关**：原始实验使用 NYC/CHI Bike + Taxi 数据，与本项目数据场景高度匹配
 > **核心思想**：指数分布 PDF 感知全局趋势 + tanh 边界化极端度 + 乘法调制 output = global × (1 + extreme)
+> **已知近似**：(1) 指数分布 PDF 按 batch 动态计算 λ=1/mean(|x|)，替代论文预计算全局 PDF 值；(2) 局部极端度使用实例 z-score (x-mean)/std 替代论文同槽位历史统计，因框架未提供同槽位数据作为独立输入
 
 ### 4.3 DAN（Distance-weighted Auto-regularized Network） ✅ 代码就绪，待用户运行
 
 > 论文：*Learning from Polar Representation: An Extreme-Adaptive Model for Long-Term Time Series Forecasting* (AAAI 2024)
 > 代码源：https://github.com/davidanastasiu/dan
 
-- [x] 核心模块（简化适配原始架构，FC backbone 替代论文 CNN+LSTM）：
-  - `PolarEncoder/Decoder`: 双通道 FC 编解码器（far + near）
+- [x] 核心模块（忠实还原论文 CNN+LSTM 架构）：
+  - `PolarEncoder`: 2-layer Conv1d(kernel=3, [16, 32]) → LSTM(hidden=64) → Linear(64, d_model) 提取局部模式+序列建模
+  - `PolarDecoder`: LSTM(hidden=64) 自回归生成 → Linear(64, 1) → P 步预测
   - RepGen: Far encoder→decoder 产生 y_far; Near encoder→decoder 产生 y_near
   - RepMerg: concat(h_far, y_near) → FC → y_final（融合极端隐变量 + 正常预测）
   - Distance-weighted loss（训练时显式中心化后计算权重）：
     - w_far = tanh(y_centered)² — 极端值高权重
     - w_near = (1-|tanh(y_centered)|)² — 正常值高权重
     - L = w_far·MSE(y_far,y) + w_near·MSE(y_near,y) + MSE(y_final,y)
-  - 默认配置：d_model=64, dropout=0.1
+  - 默认配置：d_model=64, lstm_hidden=64, conv_channels=[16, 32], kernel_size=3, dropout=0.1
 - [x] 继承 `TorchModel`，`input_mode="per_node"`
 - [x] 自定义 `fit()` 方法（distance-weighted dual-channel loss）
 - [x] 注册到 `model/registry.py`
@@ -465,8 +416,8 @@
 - [ ] **用户运行**：`python experiments/run_all.py --models DAN --settings all --epochs 100 --batch_size 64 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
 
-> **参数量**：~26K (超轻量级, N-independent)，per-series 双通道 FC
-> **核心优雅设计**：距离加权自动平衡极端/正常样本——无需手动设阈值或采样策略
+> **参数量**：~134K (N-independent)，CNN+LSTM 编解码器 + FC 全共享
+> **核心优雅设计**：距离加权自动平衡极端/正常样本——无需手动设阈值或采样策略；CNN+LSTM 编解码器提取局部模式+序列建模
 > **注意**：原始应用为水文径流预测，但远/近极性分解 + 距离加权损失是通用极端值处理技术
 
 ### 4.4 ST-SSDL（Self-Supervised Deviation Learning） ✅ 代码就绪，待用户运行
@@ -474,9 +425,9 @@
 > 论文：*How Different from the Past? Spatio-Temporal Time Series Forecasting with Self-Supervised Deviation Learning* (NeurIPS 2025)
 > 代码源：https://github.com/Jimmy-7664/ST-SSDL
 
-- [x] 核心模块（ST-SSDL-lite：适配原始架构为 per-node 模式，替换 GCRU backbone 为 Linear encoder 以确保 N-independent）：
+- [x] 核心模块（ST-SSDL-lite：替换 GCRU backbone 为 LSTM encoder 以确保 N-independent）：
   - Historical Anchoring: x_dev = x - mean(x)，提取偏差信号
-  - Encoder: Patching(4,2) → Linear embed → FC(n_patches×d, d) → GELU → FC(d, d) → z ∈ R^d
+  - Encoder: x_dev → LSTM(lstm_hidden=64, layers=2) → last hidden state h ∈ R^d_h → Wq(d, d_model) → z ∈ R^d
   - Learnable Prototypes: K=8 个全局共享原型 μ ∈ R^(K, d)
   - Prototype Assignment: argmin_k ||z - μ_k|| → 找到最近原型
   - Prediction head: concat(z, μ_nearest) → FC → ŷ (加回 x_mean 恢复尺度)
@@ -485,7 +436,7 @@
     - L_contrast = triplet margin loss (top-1 positive, top-2 negative, margin=0.5, stop-gradient on query)
     - L_deviation = MSE(||z - μ*||, |ŷ - y|_mean) → 距离≈误差一致性
     - L_total = L_pred + α·L_contrast + β·L_deviation
-  - 默认配置：d_model=64, n_protos=8, α=0.01, β=0.1, patch_len=4, stride=2
+  - 默认配置：d_model=64, lstm_hidden=64, n_protos=8, α=0.01, β=0.1, lstm_layers=2
 - [x] 继承 `TorchModel`，`input_mode="per_node"`
 - [x] 自定义 `fit()` 方法（triple loss，L1 primary loss）
 - [x] 注册到 `model/registry.py`
@@ -493,10 +444,10 @@
 - [ ] **用户运行**：`python experiments/run_all.py --models STSSDL --settings all --epochs 100 --batch_size 64 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
 
-> **参数量**：~35K (N-independent)，原型 + encoder 均为共享参数
+> **参数量**：~64K (N-independent)，LSTM + Wq + 原型 + prediction head 均为共享参数
 > **顶会最新**：NeurIPS 2025（东京大学 + 丰田汽车）
 > **核心洞察**：偏差学习天然对应异常预测——高偏差(远离原型) = 异常时段，低偏差(靠近原型) = 正常时段
-> **适配说明**：原始论文使用 STGNN backbone（可能含 N-dependent 组件），本实现替换为 per-node Linear encoder 以确保完全 N-independent
+> **适配说明**：原始论文使用 STGNN backbone（GCRU），本实现替换为 per-node LSTM encoder + Wq projection 以确保完全 N-independent，同时提供比纯 Linear encoder 更强的时序建模能力
 
 ---
 
@@ -557,7 +508,7 @@ Phase 0 ✅
    │
    ├──→ Phase 1 (Group A 时序方法, 每个模型: 开发→用户运行→收集结果)
    │       │
-   ├──→ Phase 2 (Group B 时空图方法, 同上，可与 Phase 1 并行)
+   ├──→ Phase 2 (Group B 时空图方法) — 已废弃（N 不匹配，已从 registry 移除）
    │       │
    ├──→ Phase 3 (Group C 分布鲁棒方法, 穿插进行)
    │       │
@@ -577,7 +528,7 @@ Phase 0 ✅
 - [x] **Phase 0**：全部完成（基础设施 + 代码质量审查 + 修复）
 - [x] **HA**：全量评测完成
 - [x] **Phase 1**：LSTM ✅ / DLinear ✅ / PatchTST ✅ / TimesNet ✅（代码就绪，待用户运行）
-- [x] **Phase 2**：STGCN ✅ / DCRNN ✅ / GWNET ✅ / STGODE ✅（代码就绪，待用户运行）
+- [x] **Phase 2**：~~已废弃~~ — STGCN/DCRNN/GWNET/STGODE 因跨城市 N 不匹配从 registry 移除（2026-06-25 验证）
 - [x] **Phase 3**：TimeAlign ✅ / ProtoTS ✅ / ModernTCN ✅（代码就绪，待用户运行）
 - [x] **Phase 4**：EVL ✅ / EALGAP ✅ / DAN ✅ / ST-SSDL ✅（代码就绪，待用户运行）
 - [ ] **Phase 5-6**：待开始

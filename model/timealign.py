@@ -6,8 +6,8 @@ Faithful PyTorch reimplementation based on:
 - Reference code: https://github.com/TROUBADOUR000/TimeAlign
 
 Key architecture:
-    RevIN (reversible instance normalization) → Predict Branch (history → prediction)
-    + Reconstruct Branch (future → reconstruction, training only)
+    RevIN (reversible instance normalization) -> Predict Branch (history -> prediction)
+    + Reconstruct Branch (future -> reconstruction, training only)
     + Distribution-Aware Alignment (local element-wise + global distance matrix)
       with dynamic weighting
     Channel-independent Linear encoder. All parameters N-independent.
@@ -26,12 +26,12 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from model.torch_base import TorchModel
-from train.trainer import TrainConfig, set_seed
+from train.trainer import TrainConfig, set_seed, TrainingLoop
 from data_preprocess.torch_dataset import build_dataloader
 
 
 # ---------------------------------------------------------------------------
-# RevIN — Reversible Instance Normalization
+# RevIN -- Reversible Instance Normalization
 # ---------------------------------------------------------------------------
 
 class RevIN(nn.Module):
@@ -48,13 +48,13 @@ class RevIN(nn.Module):
         self._std = None
 
     def normalize(self, x: torch.Tensor) -> torch.Tensor:
-        """x: (B, T) — subtract mean, divide by std."""
+        """x: (B, T) -- subtract mean, divide by std."""
         self._mean = x.mean(dim=1, keepdim=True)
         self._std = x.std(dim=1, keepdim=True) + self.eps
         return (x - self._mean) / self._std
 
     def denormalize(self, x: torch.Tensor) -> torch.Tensor:
-        """x: (B, T) — restore original scale."""
+        """x: (B, T) -- restore original scale."""
         return x * self._std + self._mean
 
 
@@ -87,7 +87,7 @@ class SinusoidalPositionalEmbedding(nn.Module):
 # ---------------------------------------------------------------------------
 
 class PatchEncoder(nn.Module):
-    """Patching → Linear embed → PE → M-layer encoder
+    """Patching -> Linear embed -> PE -> M-layer encoder
     (Linear(d, d_ff)->GELU->Dropout->Linear(d_ff, d) + residual + LayerNorm)
     """
 
@@ -113,7 +113,7 @@ class PatchEncoder(nn.Module):
             self.norms.append(nn.LayerNorm(d_model))
 
     def forward(self, patches: torch.Tensor):
-        """patches: (B, n_patches, patch_len) → h, intermediates"""
+        """patches: (B, n_patches, patch_len) -> h, intermediates"""
         h = self.embed(patches)
         h = self.pos_embed(h)
         intermediates = []
@@ -131,10 +131,10 @@ class TimeAlignModel(TorchModel):
     """TimeAlign for multi-step traffic flow prediction.
 
     Architecture (faithful to TROUBADOUR000/TimeAlign):
-        RevIN → Predict Branch: Patching(H) → PatchEncoder(M layers) →
-            Linear head → RevIN denorm → (B, P, 1)
-        RevIN → Reconstruct Branch (training only): Patching(P) →
-            PatchEncoder(M layers) → Linear head → RevIN denorm → (B, H, 1)
+        RevIN -> Predict Branch: Patching(H) -> PatchEncoder(M layers) ->
+            Linear head -> RevIN denorm -> (B, P, 1)
+        RevIN -> Reconstruct Branch (training only): Patching(P) ->
+            PatchEncoder(M layers) -> Linear head -> RevIN denorm -> (B, H, 1)
         Alignment: per-layer local (element-wise) + global (L2-normalized
             distance matrix) alignment with dynamic weighting
         Gradient: alignment loss backprops only through predict branch
@@ -176,7 +176,7 @@ class TimeAlignModel(TorchModel):
             n_patches=self.pred_n_patches, d_ff=d_ff, dropout=dropout)
         self.pred_head = nn.Linear(self.pred_n_patches * d_model, P)
 
-        # Reconstruct branch (training only: future → history)
+        # Reconstruct branch (training only: future -> history)
         self.recon_encoder = PatchEncoder(
             self.recon_patch_len, d_model, n_layers,
             n_patches=self.recon_n_patches, d_ff=d_ff, dropout=dropout)
@@ -192,12 +192,12 @@ class TimeAlignModel(TorchModel):
         return "TimeAlign"
 
     def _patchify(self, x: torch.Tensor, patch_len: int) -> torch.Tensor:
-        """x: (B, T) → (B, n_patches, patch_len) with non-overlapping patches."""
+        """x: (B, T) -> (B, n_patches, patch_len) with non-overlapping patches."""
         return x.unfold(1, patch_len, patch_len)
 
     def _predict(self, X: torch.Tensor) -> torch.Tensor:
         """Predict branch only (used for inference).
-        X: (B, H, 1) → (B, P, 1)
+        X: (B, H, 1) -> (B, P, 1)
         """
         x = X.squeeze(-1)                              # (B, H)
         x = self.revin.normalize(x)
@@ -303,14 +303,28 @@ class TimeAlignModel(TorchModel):
     def _net_forward(self, X: torch.Tensor) -> torch.Tensor:
         return self._predict(X)
 
+    def _train_step_fn(self, X, Y, device):
+        """Custom train step: L1(pred) + recon + lambda * align."""
+        B, H, N = X.shape
+        X_flat = X.permute(0, 2, 1).reshape(B * N, H, 1)
+        Y_flat = Y.permute(0, 2, 1).reshape(B * N, self.P, 1)
+
+        pred_flat, recon_loss, align_loss = self._train_step(X_flat, Y_flat)
+        pred = pred_flat.reshape(B, N, self.P).permute(0, 2, 1)
+
+        pred_loss = F.l1_loss(pred, Y)
+        loss = pred_loss + recon_loss + self.lambda_align * align_loss
+        return loss, {}
+
+    def _val_step_fn(self, X, Y, device):
+        """Validation step: L1 only."""
+        pred = self.forward(X)
+        loss = F.l1_loss(pred, Y)
+        return loss, {}
+
     def fit(self, train_X: np.ndarray, train_Y: np.ndarray,
             val_X: np.ndarray, val_Y: np.ndarray) -> None:
-        """Custom training loop with alignment loss.
-
-        Standard TorchModel.fit() only passes X to model and uses MSE on
-        predictions. TimeAlign additionally needs Y during forward to compute
-        reconstruction and alignment.
-        """
+        """Custom training loop with alignment loss."""
         cfg = self.train_config
         set_seed(cfg.seed)
 
@@ -329,89 +343,16 @@ class TimeAlignModel(TorchModel):
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode="min", patience=cfg.lr_patience,
             factor=cfg.lr_factor, min_lr=cfg.min_lr)
-        criterion = nn.L1Loss()
 
-        os.makedirs(cfg.checkpoint_dir, exist_ok=True)
-        ckpt_path = os.path.join(cfg.checkpoint_dir, f"{self.name}_best.pt")
-
-        best_val_loss = float("inf")
-        patience_counter = 0
-
-        print(f"[{self.name}] Training on {device} | "
-              f"train={len(train_loader.dataset)}, "
-              f"val={len(val_loader.dataset)}")
-
-        for epoch in range(1, cfg.epochs + 1):
-            # --- Training (predict + reconstruct + align) ---
-            self.train()
-            train_total = 0.0
-            n_train = 0
-            pbar = tqdm(train_loader,
-                        desc=f"Epoch {epoch:3d}/{cfg.epochs}",
-                        leave=False, unit="batch")
-            for X, Y in pbar:
-                X, Y = X.to(device), Y.to(device)
-                B, H, N = X.shape
-
-                X_flat = X.permute(0, 2, 1).reshape(B * N, H, 1)
-                Y_flat = Y.permute(0, 2, 1).reshape(B * N, self.P, 1)
-
-                pred_flat, recon_loss, align_loss = self._train_step(
-                    X_flat, Y_flat)
-                pred = pred_flat.reshape(B, N, self.P).permute(0, 2, 1)
-
-                pred_loss = criterion(pred, Y)
-                loss = pred_loss + recon_loss + self.lambda_align * align_loss
-
-                optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(
-                    self.parameters(), max_norm=cfg.grad_clip_norm)
-                optimizer.step()
-
-                train_total += loss.item()
-                n_train += 1
-                pbar.set_postfix(loss=f"{train_total / n_train:.6f}")
-
-            train_loss = train_total / max(n_train, 1)
-
-            # --- Validation (predict only) ---
-            self.eval()
-            val_total = 0.0
-            n_val = 0
-            with torch.no_grad():
-                for X, Y in tqdm(val_loader,
-                                 desc=f"Val   {epoch:3d}/{cfg.epochs}",
-                                 leave=False, unit="batch"):
-                    X, Y = X.to(device), Y.to(device)
-                    pred = self.forward(X)
-                    val_total += criterion(pred, Y).item()
-                    n_val += 1
-
-            val_loss = val_total / max(n_val, 1)
-            scheduler.step(val_loss)
-
-            lr_now = optimizer.param_groups[0]["lr"]
-            improved = val_loss < best_val_loss
-            marker = " *" if improved else ""
-            print(f"  Epoch {epoch:3d} | train_loss={train_loss:.6f} | "
-                  f"val_loss={val_loss:.6f} | lr={lr_now:.2e}{marker}")
-
-            if improved:
-                best_val_loss = val_loss
-                patience_counter = 0
-                torch.save(self.state_dict(), ckpt_path)
-            else:
-                patience_counter += 1
-                if patience_counter >= cfg.early_stop_patience:
-                    print(f"  Early stopping at epoch {epoch} "
-                          f"(best val_loss={best_val_loss:.6f})")
-                    break
-
-        if not os.path.exists(ckpt_path):
-            raise RuntimeError(
-                f"No checkpoint saved — val_loss never improved "
-                f"(best_val_loss={best_val_loss:.6f})")
-
-        self.load_state_dict(torch.load(
-            ckpt_path, map_location=device, weights_only=True))
+        TrainingLoop.run(
+            model=self,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            train_step_fn=lambda m, X, Y, d: self._train_step_fn(X, Y, d),
+            val_step_fn=lambda m, X, Y, d: self._val_step_fn(X, Y, d),
+            config=cfg,
+            model_name=self.name,
+            device=device,
+        )

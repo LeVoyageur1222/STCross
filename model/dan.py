@@ -8,8 +8,10 @@ Faithful PyTorch reimplementation based on:
 Key architecture:
     Decomposes prediction into Far (extreme) and Near (normal) polar channels:
     1. RepGen: Dual encoder-decoders produce y_far and y_near
-    2. RepMerg: Merge far hidden + near prediction → FC → final output
-    3. Distance-weighted loss: w_f = tanh(y)², w_n = (1-|tanh(y)|)² — auto-balances
+       - Encoder: 2-layer Conv1d (local pattern extraction) -> LSTM (sequence modeling) -> Linear projection
+       - Decoder: LSTM (autoregressive generation) -> Linear to P steps
+    2. RepMerg: Merge far hidden + near prediction -> FC -> final output
+    3. Distance-weighted loss: w_f = tanh(y)^2, w_n = (1-|tanh(y)|)^2 -- auto-balances
        extreme/normal after centering to mean=0
 
     Channel-independent. All parameters N-independent.
@@ -25,67 +27,123 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from model.torch_base import TorchModel
-from train.trainer import TrainConfig, set_seed
+from train.trainer import TrainConfig, set_seed, TrainingLoop
 from data_preprocess.torch_dataset import build_dataloader
 
 
 class PolarEncoder(nn.Module):
-    """Encoder for one polar channel (far or near)."""
+    """CNN + LSTM encoder for one polar channel (far or near).
 
-    def __init__(self, H: int, d_model: int):
+    2-layer Conv1d (local pattern extraction) -> LSTM (sequence modeling) -> Linear projection.
+    """
+
+    def __init__(self, H: int, d_model: int, conv_channels: list = None,
+                 kernel_size: int = 3, lstm_hidden: int = 64):
         super().__init__()
-        self.fc1 = nn.Linear(H, d_model)
-        self.fc2 = nn.Linear(d_model, d_model)
+        if conv_channels is None:
+            conv_channels = [16, 32]
+
+        self.conv_layers = nn.ModuleList()
+        in_ch = 1
+        for out_ch in conv_channels:
+            self.conv_layers.append(
+                nn.Conv1d(in_ch, out_ch, kernel_size=kernel_size,
+                          padding=kernel_size // 2)
+            )
+            in_ch = out_ch
+
+        self.lstm = nn.LSTM(
+            input_size=conv_channels[-1],
+            hidden_size=lstm_hidden,
+            num_layers=1,
+            batch_first=True,
+        )
+
+        self.proj = nn.Linear(lstm_hidden, d_model)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = F.relu(self.fc1(x))
-        return F.relu(self.fc2(h))
+        # x: (B, H, 1) -- per-series input
+        x = x.permute(0, 2, 1)  # (B, 1, H)
+
+        for conv in self.conv_layers:
+            x = F.relu(conv(x))
+
+        x = x.permute(0, 2, 1)  # (B, H, conv_channels[-1])
+
+        _, (h_n, _) = self.lstm(x)  # h_n: (1, B, lstm_hidden)
+        h = h_n.squeeze(0)  # (B, lstm_hidden)
+
+        return self.proj(h)  # (B, d_model)
 
 
 class PolarDecoder(nn.Module):
-    """Decoder for one polar channel (far or near)."""
+    """LSTM + Linear decoder for one polar channel (far or near).
 
-    def __init__(self, d_model: int, P: int):
+    LSTM for autoregressive generation -> Linear to P steps.
+    """
+
+    def __init__(self, d_model: int, P: int, lstm_hidden: int = 64):
         super().__init__()
-        self.fc1 = nn.Linear(d_model, d_model)
-        self.fc2 = nn.Linear(d_model, P)
+        self.P = P
+        self.hidden_dim = lstm_hidden
+        self.lstm = nn.LSTM(
+            input_size=d_model,
+            hidden_size=lstm_hidden,
+            num_layers=1,
+            batch_first=True,
+        )
+        self.out = nn.Linear(lstm_hidden, 1)
 
     def forward(self, h: torch.Tensor) -> torch.Tensor:
-        out = F.relu(self.fc1(h))
-        return self.fc2(out)
+        # h: (B, d_model) -- encoded representation
+        B = h.shape[0]
+        # Repeat h as input at each step: (B, P, d_model)
+        decoder_input = h.unsqueeze(1).repeat(1, self.P, 1)
+
+        out, _ = self.lstm(decoder_input)  # (B, P, lstm_hidden)
+        out = self.out(out)  # (B, P, 1)
+        return out.squeeze(-1)  # (B, P)
 
 
 class DANModel(TorchModel):
     """DAN for extreme-adaptive time series prediction.
 
-    Note: This is a simplified version using FC backbone instead of the paper's
-    CNN+LSTM encoder/decoder architecture.
-
-    Architecture (faithful to davidanastasiu/dan):
+    Architecture (faithful to paper's CNN+LSTM design):
         1. RepGen: Dual-channel processing
            - Far encoder/decoder: captures patterns far from normal (extreme values)
            - Near encoder/decoder: captures patterns near normal
-        2. RepMerg: Fusion of far hidden state + near prediction → FC → final output
+        2. RepMerg: Fusion of far hidden state + near prediction -> FC -> final output
         3. Distance-weighted loss (centered to mean=0):
-           - w_far = tanh(y_centered)²  (high weight for extreme values)
-           - w_near = (1 - |tanh(y_centered)|)²  (high weight for normal values)
-           - L = w_far·MSE(y_far, y) + w_near·MSE(y_near, y) + MSE(y_final, y)
+           - w_far = tanh(y_centered)^2  (high weight for extreme values)
+           - w_near = (1 - |tanh(y_centered)|)^2  (high weight for normal values)
+           - L = w_far*MSE(y_far, y) + w_near*MSE(y_near, y) + MSE(y_final, y)
     """
 
     input_mode = "per_node"
 
     def __init__(self, H: int = 12, P: int = 12,
-                 d_model: int = 64, dropout: float = 0.1,
+                 d_model: int = 64, lstm_hidden: int = 64,
+                 conv_channels: list = None, kernel_size: int = 3,
+                 dropout: float = 0.1,
                  train_config: TrainConfig = None):
         super().__init__(train_config=train_config)
         self.P = P
         self.H = H
 
-        self.far_encoder = PolarEncoder(H, d_model)
-        self.far_decoder = PolarDecoder(d_model, P)
+        if conv_channels is None:
+            conv_channels = [16, 32]
 
-        self.near_encoder = PolarEncoder(H, d_model)
-        self.near_decoder = PolarDecoder(d_model, P)
+        self.far_encoder = PolarEncoder(
+            H, d_model, conv_channels=conv_channels,
+            kernel_size=kernel_size, lstm_hidden=lstm_hidden,
+        )
+        self.far_decoder = PolarDecoder(d_model, P, lstm_hidden=lstm_hidden)
+
+        self.near_encoder = PolarEncoder(
+            H, d_model, conv_channels=conv_channels,
+            kernel_size=kernel_size, lstm_hidden=lstm_hidden,
+        )
+        self.near_decoder = PolarDecoder(d_model, P, lstm_hidden=lstm_hidden)
 
         self.merge = nn.Sequential(
             nn.Linear(d_model + P, d_model),
@@ -99,13 +157,13 @@ class DANModel(TorchModel):
         return "DAN"
 
     def _forward_dual(self, X: torch.Tensor):
-        """Full dual-channel forward. Returns (y_final, y_far, y_near, h_far)."""
+        """Full dual-channel forward. Returns (y_final, y_far, y_near)."""
         x = X.squeeze(-1)
 
-        h_far = self.far_encoder(x)
+        h_far = self.far_encoder(x.unsqueeze(-1))
         y_far = self.far_decoder(h_far)
 
-        h_near = self.near_encoder(x)
+        h_near = self.near_encoder(x.unsqueeze(-1))
         y_near = self.near_decoder(h_near)
 
         merged_input = torch.cat([h_far, y_near], dim=-1)
@@ -121,13 +179,38 @@ class DANModel(TorchModel):
     def _distance_weights(y: torch.Tensor):
         """Compute polar distance weights (data assumed centered to ~mean=0).
 
-        w_far = tanh(y)² — high for values far from 0 (extreme)
-        w_near = (1 - |tanh(y)|)² — high for values near 0 (normal)
+        w_far = tanh(y)^2 -- high for values far from 0 (extreme)
+        w_near = (1 - |tanh(y)|)^2 -- high for values near 0 (normal)
         """
         t = torch.tanh(y)
         w_far = t ** 2
         w_near = (1 - t.abs()) ** 2
         return w_far, w_near
+
+    def _train_step(self, X, Y, device):
+        """Custom train step: distance-weighted dual-channel loss."""
+        B, H, N = X.shape
+        X_flat = X.permute(0, 2, 1).reshape(B * N, H, 1)
+        Y_flat = Y.permute(0, 2, 1).reshape(B * N, self.P, 1)
+        y_target = Y_flat.squeeze(-1)
+
+        y_final, y_far, y_near = self._forward_dual(X_flat)
+
+        y_centered = y_target - y_target.mean(dim=0, keepdim=True)
+        w_far, w_near = self._distance_weights(y_centered)
+
+        loss_far = (w_far * (y_far - y_target) ** 2).mean()
+        loss_near = (w_near * (y_near - y_target) ** 2).mean()
+        loss_final = F.mse_loss(y_final, y_target)
+
+        loss = loss_far + loss_near + loss_final
+        return loss, {}
+
+    def _val_step(self, X, Y, device):
+        """Validation step: MSE only."""
+        pred = self.forward(X)
+        loss = F.mse_loss(pred, Y)
+        return loss, {}
 
     def fit(self, train_X: np.ndarray, train_Y: np.ndarray,
             val_X: np.ndarray, val_Y: np.ndarray) -> None:
@@ -151,88 +234,15 @@ class DANModel(TorchModel):
             optimizer, mode="min", patience=cfg.lr_patience,
             factor=cfg.lr_factor, min_lr=cfg.min_lr)
 
-        os.makedirs(cfg.checkpoint_dir, exist_ok=True)
-        ckpt_path = os.path.join(cfg.checkpoint_dir, f"{self.name}_best.pt")
-
-        best_val_loss = float("inf")
-        patience_counter = 0
-
-        print(f"[{self.name}] Training on {device} | "
-              f"train={len(train_loader.dataset)}, val={len(val_loader.dataset)}")
-
-        for epoch in range(1, cfg.epochs + 1):
-            self.train()
-            train_total = 0.0
-            n_train = 0
-            pbar = tqdm(train_loader, desc=f"Epoch {epoch:3d}/{cfg.epochs}",
-                        leave=False, unit="batch")
-            for X, Y in pbar:
-                X, Y = X.to(device), Y.to(device)
-                B, H, N = X.shape
-
-                X_flat = X.permute(0, 2, 1).reshape(B * N, H, 1)
-                Y_flat = Y.permute(0, 2, 1).reshape(B * N, self.P, 1)
-                y_target = Y_flat.squeeze(-1)
-
-                y_final, y_far, y_near = self._forward_dual(X_flat)
-
-                # Center target before computing distance weights
-                y_centered = y_target - y_target.mean(dim=0, keepdim=True)
-                w_far, w_near = self._distance_weights(y_centered)
-
-                loss_far = (w_far * (y_far - y_target) ** 2).mean()
-                loss_near = (w_near * (y_near - y_target) ** 2).mean()
-                loss_final = F.mse_loss(y_final, y_target)
-
-                loss = loss_far + loss_near + loss_final
-
-                optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(
-                    self.parameters(), max_norm=cfg.grad_clip_norm)
-                optimizer.step()
-
-                train_total += loss.item()
-                n_train += 1
-                pbar.set_postfix(loss=f"{train_total / n_train:.6f}")
-
-            train_loss = train_total / max(n_train, 1)
-
-            self.eval()
-            val_total = 0.0
-            n_val = 0
-            with torch.no_grad():
-                for X, Y in tqdm(val_loader, desc=f"Val   {epoch:3d}/{cfg.epochs}",
-                                 leave=False, unit="batch"):
-                    X, Y = X.to(device), Y.to(device)
-                    pred = self.forward(X)
-                    val_total += F.mse_loss(pred, Y).item()
-                    n_val += 1
-
-            val_loss = val_total / max(n_val, 1)
-            scheduler.step(val_loss)
-
-            lr_now = optimizer.param_groups[0]["lr"]
-            improved = val_loss < best_val_loss
-            marker = " *" if improved else ""
-            print(f"  Epoch {epoch:3d} | train_loss={train_loss:.6f} | "
-                  f"val_loss={val_loss:.6f} | lr={lr_now:.2e}{marker}")
-
-            if improved:
-                best_val_loss = val_loss
-                patience_counter = 0
-                torch.save(self.state_dict(), ckpt_path)
-            else:
-                patience_counter += 1
-                if patience_counter >= cfg.early_stop_patience:
-                    print(f"  Early stopping at epoch {epoch} "
-                          f"(best val_loss={best_val_loss:.6f})")
-                    break
-
-        if not os.path.exists(ckpt_path):
-            raise RuntimeError(
-                f"No checkpoint saved — val_loss never improved "
-                f"(best_val_loss={best_val_loss:.6f})")
-
-        self.load_state_dict(torch.load(
-            ckpt_path, map_location=device, weights_only=True))
+        TrainingLoop.run(
+            model=self,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            train_step_fn=lambda m, X, Y, d: self._train_step(X, Y, d),
+            val_step_fn=lambda m, X, Y, d: self._val_step(X, Y, d),
+            config=cfg,
+            model_name=self.name,
+            device=device,
+        )

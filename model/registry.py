@@ -62,57 +62,11 @@ def build_timesnet(config: EvalConfig, train_config: TrainConfig):
     )
 
 
-@register("STGCN")
-def build_stgcn(config: EvalConfig, train_config: TrainConfig):
-    import numpy as np
-    from model.stgcn import STGCNModel
-    adj = np.load(config.adj_path(config.target_city))
-    N = adj.shape[0]
-    return STGCNModel(
-        N=N, adj=adj,
-        H=config.history_len, P=config.predict_len,
-        train_config=train_config,
-    )
-
-
-@register("DCRNN")
-def build_dcrnn(config: EvalConfig, train_config: TrainConfig):
-    import numpy as np
-    from model.dcrnn import DCRNNModel
-    adj = np.load(config.adj_path(config.target_city))
-    N = adj.shape[0]
-    return DCRNNModel(
-        N=N, adj=adj,
-        H=config.history_len, P=config.predict_len,
-        train_config=train_config,
-    )
-
-
-@register("GWNET")
-def build_gwnet(config: EvalConfig, train_config: TrainConfig):
-    import numpy as np
-    from model.gwnet import GWNETModel
-    adj = np.load(config.adj_path(config.target_city))
-    N = adj.shape[0]
-    return GWNETModel(
-        N=N, adj=adj,
-        H=config.history_len, P=config.predict_len,
-        train_config=train_config,
-    )
-
-
-@register("STGODE")
-def build_stgode(config: EvalConfig, train_config: TrainConfig):
-    import numpy as np
-    from model.stgode import STGODEModel
-    adj = np.load(config.adj_path(config.target_city))
-    N = adj.shape[0]
-    return STGODEModel(
-        N=N, adj=adj,
-        H=config.history_len, P=config.predict_len,
-        train_config=train_config,
-    )
-
+# Group B models (STGCN, DCRNN, GWNET, STGODE) removed from registry.
+# Reason: cross-city crashes because NYC(820 nodes) ≠ CHI(585 nodes).
+# These models contain N-dependent adjacency buffers that cannot be
+# reshaped for a different-city input. Verified 2026-06-25.
+# See TODO.md Phase 2 for details.
 
 @register("TimeAlign")
 def build_timealign(config: EvalConfig, train_config: TrainConfig):

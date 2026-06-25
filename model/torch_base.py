@@ -3,6 +3,7 @@ from abc import abstractmethod
 import numpy as np
 import torch
 import torch.nn as nn
+from tqdm import tqdm
 
 from model.base import BaseModel
 from train.trainer import Trainer, TrainConfig
@@ -80,9 +81,13 @@ class TorchModel(BaseModel, nn.Module):
         self.to(self._device)
         X_tensor = torch.from_numpy(X).float()
         results = []
+        # Use 2x training batch_size for inference: inference is cheaper (no grads),
+        # so larger batches improve throughput without memory pressure.
         batch_size = self.train_config.batch_size * 2
+        n_batches = (len(X_tensor) + batch_size - 1) // batch_size
         with torch.no_grad():
-            for i in range(0, len(X_tensor), batch_size):
+            for i in tqdm(range(0, len(X_tensor), batch_size),
+                          total=n_batches, desc="Predict", unit="batch", leave=False):
                 batch = X_tensor[i:i + batch_size].to(self._device)
                 out = self.forward(batch).cpu().numpy()
                 results.append(out)

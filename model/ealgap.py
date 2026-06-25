@@ -36,9 +36,16 @@ class GlobalTrendModule(nn.Module):
       1. Compute rate parameter lambda = 1 / mean(|x|).
       2. Compute PDF values: pdf(x) = lambda * exp(-lambda * |x|).
       3. Feed [x, pdf] through a small MLP decoder with intermediate
-         softmax to produce data-dependent Q, K, V.
+         GELU and final Softmax to produce data-dependent Q, K, V.
       4. Multi-head self-attention over the time axis.
       5. LayerNorm + residual, then linear head to produce global prediction.
+
+    Approximation note: The exponential PDF is computed dynamically
+    per-batch as an approximation of the paper's pre-computed PDF values.
+    In the original paper, PDF values are computed offline from the full
+    dataset distribution; here we estimate lambda = 1/mean(|x|) from each
+    mini-batch independently, which converges to the global estimate as
+    batch size grows.
     """
 
     def __init__(self, H: int, P: int, d_model: int, n_heads: int = 4,
@@ -52,11 +59,14 @@ class GlobalTrendModule(nn.Module):
         self.input_proj = nn.Linear(2, d_model)
 
         # MLP decoder for generating Q, K, V from PDF-enriched embeddings
-        # Dense -> softmax -> Dense -> softmax -> reshape  (per the paper's
-        # distribution-aware generation idea)
+        # Dense -> GELU -> Dense -> Softmax -> reshape  (per the paper's
+        # distribution-aware generation idea).  GELU replaces Softmax in the
+        # intermediate layer to provide non-saturating, smooth feature
+        # transformation; Softmax is kept in the final layer to produce
+        # normalized attention weights.
         self.qkv_mlp = nn.Sequential(
             nn.Linear(d_model, d_model * 2),
-            nn.Softmax(dim=-1),
+            nn.GELU(),
             nn.Linear(d_model * 2, d_model * 3),
             nn.Softmax(dim=-1),
         )
@@ -128,11 +138,16 @@ class GlobalTrendModule(nn.Module):
 class LocalExtremeModule(nn.Module):
     """Local extreme degree via instance z-score normalization.
 
-    The paper computes deviation from same-slot historical statistics.
-    Since we don't have same-slot data as separate inputs, we approximate
-    with instance z-score: (x - mean(x)) / (std(x) + eps), then apply
-    a learnable scaling gamma and tanh bounding to get extreme degree
-    in [-1, 1].
+    Approximation note: The paper computes deviation from same-slot
+    historical statistics (e.g., "this hour's flow compared to the
+    distribution of the same hour across all days").  Since same-slot
+    data is not available as a separate input in this framework, we
+    approximate with instance z-score: (x - mean(x)) / (std(x) + eps),
+    then apply a learnable scaling gamma and tanh bounding to get extreme
+    degree in [-1, 1].  This instance-level normalization captures the
+    relative extremeness of each time step within the current window,
+    which is a weaker but still useful proxy for the paper's same-slot
+    historical deviation.
 
     A small GRU refines the per-step extreme signal, and a linear head
     maps it to P output steps.

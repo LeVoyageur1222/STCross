@@ -3,7 +3,7 @@
 > 本文件说明如何运行各 baseline 模型的训练和评测。
 > 每个模型开发完成后，按此指南运行 4 种实验设置，将结果保存到 `results/` 目录。
 >
-> 最后更新：2026-06-24
+> 最后更新：2026-06-25
 
 ## 环境准备
 
@@ -52,6 +52,11 @@ python experiments/run_all.py --settings all
 - 单个模型失败不影响其他模型
 - 运行完毕自动生成 `results/summary.md`
 
+**强制重跑**：使用 `--force` 参数跳过缓存检查，强制重跑已完成实验：
+```bash
+python experiments/run_all.py --models LSTM --settings all --force
+```
+
 **如需重跑某个实验**，删除对应 JSON 文件后重新运行：
 ```bash
 rm results/LSTM_NYC_to_NYC_*.json
@@ -81,6 +86,7 @@ python experiments/run_all.py --models HA --settings all
 ```
 
 > HA 无需训练，跨城市结果与同城相同（始终使用 target 训练集）。
+> 也可单独运行：`python experiments/run_ha_baseline.py --output_dir results/`
 
 ### LSTM ✅ 已就绪
 
@@ -128,57 +134,6 @@ python experiments/run_all.py --models TimesNet --settings all \
 > 建议优先跑 LSTM/DLinear/PatchTST，TimesNet 放到最后或用 GPU 服务器跑。
 > 模型结构（忠实 TSLib 原版）：TokenEmbedding(Conv1d k=3) → predict_linear(H→H+P) → TimesBlock×2(FFT+2D Inception×6) → RevIN
 > 超参：d_model=32, d_ff=32, top_k=3, num_kernels=6, n_layers=2
-
-### STGCN ✅ 已就绪
-
-```bash
-python experiments/run_all.py --models STGCN --settings all \
-    --epochs 100 --batch_size 32 --lr 1e-3
-```
-
-> 预计 MPS 单次训练 ~15-30 min，4 设置合计 ~60-120 min。
-> 模型结构（忠实 hazdzz benchmark 版本）：2 × STConvBlock (TemporalConv-GLU → ChebGraphConv(K=3) → TemporalConv-GLU → LayerNorm) → OutputLayer(TemporalConv → FC → FC)
-> 默认 blocks=[[1,16,64],[64,16,64]], Ks=3, Kt=3
-> 邻接矩阵自动从 `data/processed_data/adjacency/` 加载（跨城市时加载 target 城市的）。
-
-### DCRNN ✅ 已就绪
-
-```bash
-python experiments/run_all.py --models DCRNN --settings all \
-    --epochs 100 --batch_size 32 --lr 1e-3
-```
-
-> **注意**：DCRNN 是 Seq2Seq 架构（encoder 12 步 + decoder 12 步 = 24 个顺序 RNN 步），训练最慢。
-> MPS 预计单次训练 ~4-8 小时，建议用 GPU 服务器或降低 epochs（如 50）。
-> 模型结构：DCRNNEncoder(2 层 DCGRU) → 复制隐状态 → DCRNNDecoder(2 层 DCGRU, 自回归)
-> 默认 hidden_dim=64, K=2 (双向随机游走, 6 个支撑矩阵), num_layers=2
-> 邻接矩阵自动从 `data/processed_data/adjacency/` 加载。
-
-### GWNET ✅ 已就绪
-
-```bash
-python experiments/run_all.py --models GWNET --settings all \
-    --epochs 100 --batch_size 32 --lr 1e-3
-```
-
-> 预计 GPU 单次训练 ~15-30 min，4 设置合计 ~60-120 min。
-> 模型结构（忠实 nnzhan/Graph-WaveNet 版本）：Dilated Causal Conv(dilation=[1,2]×4 blocks) → Gated TCN(tanh⊙sigmoid) → MixProp Graph Conv(order=2, 3 supports) → Skip + Residual → FC
-> 默认 residual_ch=32, skip_ch=128, end_ch=256, blocks=4, layers=2, receptive_field=13
-> 支撑矩阵：forward + backward random walk + 自适应邻接 (learnable E₁@E₂)
-> 邻接矩阵自动从 `data/processed_data/adjacency/` 加载。
-
-### STGODE ✅ 已就绪
-
-```bash
-python experiments/run_all.py --models STGODE --settings all \
-    --epochs 100 --batch_size 32 --lr 1e-3
-```
-
-> 预计 GPU 单次训练 ~15-30 min，4 设置合计 ~60-120 min。
-> 模型结构（忠实 square-coder/STGODE 版本）：TCN(CausalConv dilation=[1,2]) → 双 ODEG 分支(Euler ODE 图演化 6 步) → Concat → FC
-> ODE 动力学：f(H,A) = Ã·H·W + H⊙d (GCN + 对角残差)
-> 默认 d_model=64, ode_time=6.0, step_size=1.0, 418K 参数（N-independent）
-> 邻接矩阵自动从 `data/processed_data/adjacency/` 加载，GCN 归一化（对称 + self-loop）。
 
 ### TimeAlign ✅ 已就绪
 
@@ -254,8 +209,8 @@ python experiments/run_all.py --models DAN --settings all \
 ```
 
 > 预计 GPU 单次训练 ~3-5 min，4 设置合计 ~12-20 min。
-> 模型结构（忠实 davidanastasiu/dan）：Dual Polar Channels (Far encoder/decoder + Near encoder/decoder) → RepMerg(concat h_far + y_near → FC) → y_final
-> 默认 d_model=64, ~26K 参数（超轻量级）
+> 模型结构（忠实 davidanastasiu/dan，CNN+LSTM backbone）：Dual Polar Channels (Far encoder/decoder + Near encoder/decoder) → RepMerg(concat h_far + y_near → FC) → y_final
+> 默认 d_model=64, lstm_hidden=64, conv_channels=[16,32], kernel_size=3, ~134K 参数
 > **自定义 fit()**：distance-weighted loss (w_far=tanh²(y), w_near=(1-|tanh(y)|)²)
 > Channel-independent → 天然支持跨城市迁移，无需邻接矩阵。
 
@@ -267,9 +222,9 @@ python experiments/run_all.py --models STSSDL --settings all \
 ```
 
 > 预计 GPU 单次训练 ~5-10 min，4 设置合计 ~20-40 min。
-> 模型结构（适配 Jimmy-7664/ST-SSDL 为 per-node 模式）：Historical Anchoring(减均值) → Patch encoder → Prototype Assignment(nearest) → concat(z, μ*) → FC → prediction
-> 默认 d_model=64, n_protos=8, α=0.01, β=0.1, ~35K 参数
-> **自定义 fit()**：triple loss = MSE + α·contrastive(push prototypes apart) + β·deviation(distance≈error)
+> 模型结构（适配 Jimmy-7664/ST-SSDL 为 per-node 模式，LSTM backbone）：Historical Anchoring(减均值) → LSTM encoder → Prototype Assignment(nearest) → concat(z, μ*) → FC → prediction
+> 默认 d_model=64, lstm_hidden=64, lstm_layers=2, n_protos=8, α=0.01, β=0.1, ~64K 参数
+> **自定义 fit()**：triple loss = L1 + α·contrastive(push prototypes apart) + β·deviation(distance≈error)
 > Channel-independent → 天然支持跨城市迁移，无需邻接矩阵。
 
 ---
@@ -287,16 +242,12 @@ python experiments/run_all.py --models STSSDL --settings all \
 
 ## 训练资源估算
 
-| 模型组 | 模型 | 估算单次训练时长 (MPS) | 4 设置合计 |
+| 模型组 | 模型 | 估算单次训练时长 (MPS/GPU) | 4 设置合计 |
 |--------|------|------------------------|-----------|
 | Group A | LSTM | ~5-10 min | ~20-40 min |
 | Group A | DLinear | ~3-5 min | ~12-20 min |
 | Group A | PatchTST | ~10-20 min | ~40-80 min |
-| Group A | TimesNet | ~15-30 min | ~60-120 min |
-| Group B | STGCN | ~15-30 min | ~60-120 min |
-| Group B | DCRNN | ~20-40 min | ~80-160 min |
-| Group B | GWNET | ~15-30 min | ~60-120 min |
-| Group B | STGODE | ~20-40 min | ~80-160 min |
+| Group A | TimesNet | ~60-120 min (CPU) | ~4-8 h |
 | Group C | TimeAlign | ~5-10 min | ~20-40 min |
 | Group C | ProtoTS | ~3-5 min | ~12-20 min |
 | Group C | ModernTCN | ~3-5 min | ~12-20 min |
@@ -306,7 +257,6 @@ python experiments/run_all.py --models STSSDL --settings all \
 | Group D | STSSDL | ~5-10 min | ~20-40 min |
 
 > 以上为粗略估算，实际取决于 early stopping 触发时间。
-> Group B 模型因涉及图卷积 + 全节点输入 (batch, H, N)，显存/内存占用更大。
 
 ---
 
@@ -315,6 +265,8 @@ python experiments/run_all.py --models STSSDL --settings all \
 **OOM（内存不足）**：减小 `--batch_size`（如 32→16→8）
 
 **训练无收敛（val_loss 不降）**：降低 `--lr`（如 1e-3→1e-4），或检查模型输出维度
+
+**NaN/Inf 损失**：训练中自动检测 `torch.isnan(loss)` 和 `torch.isinf(loss)`，遇到 NaN/Inf 时跳过该 batch 并继续训练
 
 **跨城市结果异常**：确认模型的图卷积核参数与 N 无关（Group A 无此问题）
 

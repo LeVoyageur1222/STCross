@@ -29,7 +29,7 @@ def calc_pcc(y_true: np.ndarray, y_pred: np.ndarray) -> float:
         return float("nan")
     y_true, y_pred = y_true.flatten(), y_pred.flatten()
     if np.std(y_true) < 1e-8 or np.std(y_pred) < 1e-8:
-        return 0.0
+        return float("nan")
     r, _ = pearsonr(y_true, y_pred)
     return float(r)
 

@@ -27,11 +27,12 @@ def _config_matches(loaded: dict, cfg: EvalConfig) -> bool:
     return (loaded.get("history_len") == cfg.history_len and
             loaded.get("predict_len") == cfg.predict_len and
             loaded.get("anomaly_min_ratio") == cfg.anomaly_min_ratio and
-            loaded.get("train_steps") == cfg.train_steps)
+            loaded.get("train_steps") == cfg.train_steps and
+            "test_steps" in loaded)
 
 
 def run_experiments(model_names: list, settings: list, output_dir: str = "results",
-                    train_config: TrainConfig = None):
+                    train_config: TrainConfig = None, force: bool = False):
     train_config = train_config or TrainConfig()
     os.makedirs(output_dir, exist_ok=True)
     all_results = []
@@ -46,22 +47,23 @@ def run_experiments(model_names: list, settings: list, output_dir: str = "result
             tag = setting.get("tag", "")
             config = EvalConfig(source_city=source, target_city=target)
 
-            # Check for existing valid results
-            result_pattern = f"{model_name}_{source}_to_{target}_"
-            existing = sorted(f for f in os.listdir(output_dir)
-                              if f.startswith(result_pattern) and f.endswith(".json"))
+            # Check for existing valid results (skip if --force not set)
             skip = False
-            if existing:
-                try:
-                    with open(os.path.join(output_dir, existing[-1])) as f:
-                        loaded = json.load(f)
-                    if _config_matches(loaded, config):
-                        print(f"[SKIP] {model_name} {source}->{target} "
-                              f"(matched: {existing[-1]})")
-                        all_results.append(loaded)
-                        skip = True
-                except (json.JSONDecodeError, KeyError):
-                    pass
+            if not force:
+                result_pattern = f"{model_name}_{source}_to_{target}_"
+                existing = sorted(f for f in os.listdir(output_dir)
+                                  if f.startswith(result_pattern) and f.endswith(".json"))
+                if existing:
+                    try:
+                        with open(os.path.join(output_dir, existing[-1])) as f:
+                            loaded = json.load(f)
+                        if _config_matches(loaded, config):
+                            print(f"[SKIP] {model_name} {source}->{target} "
+                                  f"(matched: {existing[-1]})")
+                            all_results.append(loaded)
+                            skip = True
+                    except (json.JSONDecodeError, KeyError):
+                        pass
             if skip:
                 continue
 
@@ -135,6 +137,8 @@ def main():
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--force", action="store_true",
+                        help="Force rerun all experiments, ignoring cached results")
     args = parser.parse_args()
 
     if "all" in args.settings:
@@ -144,7 +148,8 @@ def main():
 
     train_config = TrainConfig(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr)
 
-    all_results = run_experiments(args.models, settings, args.output_dir, train_config)
+    all_results = run_experiments(args.models, settings, args.output_dir, train_config,
+                              force=args.force)
     compile_summary(all_results, args.output_dir)
 
 

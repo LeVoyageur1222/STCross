@@ -5,10 +5,10 @@ Faithful PyTorch reimplementation based on:
 - Reference code: https://github.com/SKURA502/ProtoTS
 
 Key architecture:
-    Patching → Bottleneck MLP-Mixer → Time Aggregation → Prototype Similarity → Weighted Sum of Patterns
-    Each prototype has: embedding μ (for matching) + temporal pattern p (output curve).
-    Prediction = Σ softmax(-dist(z, μ_i)) · p_i
-    Loss = L1 + λ · H(w)  (entropy minimization → sparse prototype activation)
+    Patching -> Bottleneck MLP-Mixer -> Time Aggregation -> Prototype Similarity -> Weighted Sum of Patterns
+    Each prototype has: embedding mu (for matching) + temporal pattern p (output curve).
+    Prediction = Sigma softmax(-dist(z, mu_i)) . p_i
+    Loss = L1 + lambda . H(w)  (entropy minimization -> sparse prototype activation)
     Channel-independent. All parameters N-independent.
 """
 
@@ -21,7 +21,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from model.torch_base import TorchModel
-from train.trainer import TrainConfig, set_seed
+from train.trainer import TrainConfig, set_seed, TrainingLoop
 from data_preprocess.torch_dataset import build_dataloader
 
 
@@ -53,12 +53,12 @@ class ProtoTSModel(TorchModel):
     """ProtoTS for multi-step traffic flow prediction.
 
     Architecture (faithful to SKURA502/ProtoTS):
-        1. Patching(patch_len=4, stride=2) → Linear embed
+        1. Patching(patch_len=4, stride=2) -> Linear embed
         2. Bottleneck MLP-Mixer (feature + time mixing with bottleneck d_bottle)
-        3. Time aggregation: (B, n_patches, d) → (B, d)
-        4. Prototype similarity: Euclidean dist(z, μ_i) → softmax weights
-        5. Prediction: Σ w_i · p_i where p_i is learnable temporal pattern (P steps)
-        Loss: L1 + λ·H(w) — entropy minimization encourages sparse prototype activation
+        3. Time aggregation: (B, n_patches, d) -> (B, d)
+        4. Prototype similarity: Euclidean dist(z, mu_i) -> softmax weights
+        5. Prediction: Sigma w_i . p_i where p_i is learnable temporal pattern (P steps)
+        Loss: L1 + lambda*H(w) -- entropy minimization encourages sparse prototype activation
     """
 
     input_mode = "per_node"
@@ -94,7 +94,7 @@ class ProtoTSModel(TorchModel):
         return "ProtoTS"
 
     def _encode(self, X: torch.Tensor) -> torch.Tensor:
-        """Encode input to prototype-matching space: (B, H, 1) → (B, d_model)."""
+        """Encode input to prototype-matching space: (B, H, 1) -> (B, d_model)."""
         x = X.squeeze(-1)
         patches = x.unfold(1, self.patch_len, self.stride)
         h = self.embed(patches)
@@ -118,13 +118,29 @@ class ProtoTSModel(TorchModel):
         pred, _ = self._proto_predict(z)
         return pred.unsqueeze(-1)
 
+    def _train_step(self, X, Y, device):
+        """Custom train step: L1 + lambda * entropy."""
+        B, H, N = X.shape
+        X_flat = X.permute(0, 2, 1).reshape(B * N, H, 1)
+        Y_flat = Y.permute(0, 2, 1).reshape(B * N, self.P, 1)
+
+        z = self._encode(X_flat)
+        pred, weights = self._proto_predict(z)
+
+        l1_loss = F.l1_loss(pred, Y_flat.squeeze(-1))
+        entropy = -(weights * torch.log(weights + 1e-8)).sum(dim=-1).mean()
+        loss = l1_loss + self.lambda_ent * entropy
+        return loss, {}
+
+    def _val_step(self, X, Y, device):
+        """Validation step: L1 only."""
+        pred = self.forward(X)
+        loss = F.l1_loss(pred, Y)
+        return loss, {}
+
     def fit(self, train_X: np.ndarray, train_Y: np.ndarray,
             val_X: np.ndarray, val_Y: np.ndarray) -> None:
-        """Custom training with L1 + entropy regularization.
-
-        Paper loss: L = ||Ŷ - Y||₁ - λ·Σ w_i·log(w_i) = L1 + λ·H(w)
-        Entropy minimization encourages sparse prototype activation.
-        """
+        """Custom training with L1 + entropy regularization."""
         cfg = self.train_config
         set_seed(cfg.seed)
 
@@ -144,83 +160,16 @@ class ProtoTSModel(TorchModel):
             optimizer, mode="min", patience=cfg.lr_patience,
             factor=cfg.lr_factor, min_lr=cfg.min_lr)
 
-        os.makedirs(cfg.checkpoint_dir, exist_ok=True)
-        ckpt_path = os.path.join(cfg.checkpoint_dir, f"{self.name}_best.pt")
-
-        best_val_loss = float("inf")
-        patience_counter = 0
-
-        print(f"[{self.name}] Training on {device} | "
-              f"train={len(train_loader.dataset)}, val={len(val_loader.dataset)} | "
-              f"n_protos={self.n_protos}")
-
-        for epoch in range(1, cfg.epochs + 1):
-            self.train()
-            train_total = 0.0
-            n_train = 0
-            pbar = tqdm(train_loader, desc=f"Epoch {epoch:3d}/{cfg.epochs}",
-                        leave=False, unit="batch")
-            for X, Y in pbar:
-                X, Y = X.to(device), Y.to(device)
-                B, H, N = X.shape
-
-                X_flat = X.permute(0, 2, 1).reshape(B * N, H, 1)
-                Y_flat = Y.permute(0, 2, 1).reshape(B * N, self.P, 1)
-
-                z = self._encode(X_flat)
-                pred, weights = self._proto_predict(z)
-
-                l1_loss = F.l1_loss(pred, Y_flat.squeeze(-1))
-                entropy = -(weights * torch.log(weights + 1e-8)).sum(dim=-1).mean()
-                loss = l1_loss + self.lambda_ent * entropy
-
-                optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(
-                    self.parameters(), max_norm=cfg.grad_clip_norm)
-                optimizer.step()
-
-                train_total += loss.item()
-                n_train += 1
-                pbar.set_postfix(loss=f"{train_total / n_train:.6f}")
-
-            train_loss = train_total / max(n_train, 1)
-
-            self.eval()
-            val_total = 0.0
-            n_val = 0
-            with torch.no_grad():
-                for X, Y in tqdm(val_loader, desc=f"Val   {epoch:3d}/{cfg.epochs}",
-                                 leave=False, unit="batch"):
-                    X, Y = X.to(device), Y.to(device)
-                    pred = self.forward(X)
-                    val_total += F.l1_loss(pred, Y).item()
-                    n_val += 1
-
-            val_loss = val_total / max(n_val, 1)
-            scheduler.step(val_loss)
-
-            lr_now = optimizer.param_groups[0]["lr"]
-            improved = val_loss < best_val_loss
-            marker = " *" if improved else ""
-            print(f"  Epoch {epoch:3d} | train_loss={train_loss:.6f} | "
-                  f"val_loss={val_loss:.6f} | lr={lr_now:.2e}{marker}")
-
-            if improved:
-                best_val_loss = val_loss
-                patience_counter = 0
-                torch.save(self.state_dict(), ckpt_path)
-            else:
-                patience_counter += 1
-                if patience_counter >= cfg.early_stop_patience:
-                    print(f"  Early stopping at epoch {epoch} "
-                          f"(best val_loss={best_val_loss:.6f})")
-                    break
-
-        if not os.path.exists(ckpt_path):
-            raise RuntimeError(
-                f"No checkpoint saved — val_loss never improved "
-                f"(best_val_loss={best_val_loss:.6f})")
-
-        self.load_state_dict(torch.load(
-            ckpt_path, map_location=device, weights_only=True))
+        TrainingLoop.run(
+            model=self,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            train_step_fn=lambda m, X, Y, d: self._train_step(X, Y, d),
+            val_step_fn=lambda m, X, Y, d: self._val_step(X, Y, d),
+            config=cfg,
+            model_name=self.name,
+            device=device,
+            extra_log=f" | n_protos={self.n_protos}",
+        )
