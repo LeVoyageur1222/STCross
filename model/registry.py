@@ -166,3 +166,12 @@ def build_dan(config: EvalConfig, train_config: TrainConfig):
         H=config.history_len, P=config.predict_len,
         train_config=train_config,
     )
+
+
+@register("STSSDL")
+def build_stssdl(config: EvalConfig, train_config: TrainConfig):
+    from model.stssdl import STSSDLModel
+    return STSSDLModel(
+        H=config.history_len, P=config.predict_len,
+        train_config=train_config,
+    )

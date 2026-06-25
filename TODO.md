@@ -453,27 +453,34 @@
 > **核心优雅设计**：距离加权自动平衡极端/正常样本——无需手动设阈值或采样策略
 > **注意**：原始应用为水文径流预测，但远/近极性分解 + 距离加权损失是通用极端值处理技术
 
-### 4.4 ST-SSDL（Self-Supervised Deviation Learning）
+### 4.4 ST-SSDL（Self-Supervised Deviation Learning） ✅ 代码就绪，待用户运行
 
 > 论文：*How Different from the Past? Spatio-Temporal Time Series Forecasting with Self-Supervised Deviation Learning* (NeurIPS 2025)
 > 代码源：https://github.com/Jimmy-7664/ST-SSDL
 
-- [ ] 获取代码，评估适配难度
-- [ ] 核心机制：偏差量化 + 可学习原型 + 自监督对比学习
-  - **Historical Anchoring**：将输入锚定到历史均值，提取偏差信号（数据统计，非学习参数）
-  - **Learnable Prototypes**：全局共享原型库离散化潜在空间，每个原型代表一种典型时序模式
-  - **Contrastive Loss**：增强原型间判别性
-  - **Deviation Loss**：量化输入表示与对应原型间的距离一致性，显式度量偏差程度
-  - 联合优化：prediction + contrastive + deviation
-  - 适配：原始论文可能使用 STGNN backbone，替换为 per-node encoder 以确保 N-independent
-- [ ] 适配到 `TorchModel`，`input_mode="per_node"`
-- [ ] 注册到 `model/registry.py`
+- [x] 核心模块（适配原始架构为 per-node 模式）：
+  - Historical Anchoring: x_dev = x - mean(x)，提取偏差信号
+  - Encoder: Patching(4,2) → Linear embed → FC(n_patches×d, d) → GELU → FC(d, d) → z ∈ R^d
+  - Learnable Prototypes: K=8 个全局共享原型 μ ∈ R^(K, d)
+  - Prototype Assignment: argmin_k ||z - μ_k|| → 找到最近原型
+  - Prediction head: concat(z, μ_nearest) → FC → ŷ (加回 x_mean 恢复尺度)
+  - Triple loss:
+    - L_pred = MSE(ŷ, y)
+    - L_contrast = -mean(pairwise prototype distances) → 推开原型增强判别性
+    - L_deviation = MSE(||z - μ*||, |ŷ - y|_mean) → 距离≈误差一致性
+    - L_total = L_pred + α·L_contrast + β·L_deviation
+  - 默认配置：d_model=64, n_protos=8, α=0.01, β=0.1, patch_len=4, stride=2
+- [x] 继承 `TorchModel`，`input_mode="per_node"`（替换 STGNN backbone 为 per-node encoder）
+- [x] 自定义 `fit()` 方法（triple loss）
+- [x] 注册到 `model/registry.py`
+- [x] Smoke test 通过（anchor + encode + assign + contrastive + deviation + backward 正确）
 - [ ] **用户运行**：`python experiments/run_all.py --models STSSDL --settings all --epochs 100 --batch_size 64 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
 
-> **参数量**：预计 ~30-80K (N-independent)，原型 + encoder 均为共享参数
+> **参数量**：~35K (N-independent)，原型 + encoder 均为共享参数
 > **顶会最新**：NeurIPS 2025（东京大学 + 丰田汽车）
-> **与异常预测的天然关联**：偏差学习本质上就是量化"当前模式与典型模式的差异程度"——高偏差 = 异常时段，低偏差 = 正常时段
+> **核心洞察**：偏差学习天然对应异常预测——高偏差(远离原型) = 异常时段，低偏差(靠近原型) = 正常时段
+> **适配说明**：原始论文使用 STGNN backbone（可能含 N-dependent 组件），本实现替换为 per-node Linear encoder 以确保完全 N-independent
 
 ---
 
@@ -556,5 +563,5 @@ Phase 0 ✅
 - [x] **Phase 1**：LSTM ✅ / DLinear ✅ / PatchTST ✅ / TimesNet ✅（代码就绪，待用户运行）
 - [x] **Phase 2**：STGCN ✅ / DCRNN ✅ / GWNET ✅ / STGODE ✅（代码就绪，待用户运行）
 - [x] **Phase 3**：TimeAlign ✅ / ProtoTS ✅ / ModernTCN ✅（代码就绪，待用户运行）
-- [ ] **Phase 4**：EVL → EALGAP → DAN → ST-SSDL（已规划，待开发）
+- [x] **Phase 4**：EVL ✅ / EALGAP ✅ / DAN ✅ / ST-SSDL ✅（代码就绪，待用户运行）
 - [ ] **Phase 5-6**：待开始

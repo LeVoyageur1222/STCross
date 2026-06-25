@@ -259,6 +259,19 @@ python experiments/run_all.py --models DAN --settings all \
 > **自定义 fit()**：distance-weighted loss (w_far=tanh²(y), w_near=(1-|tanh(y)|)²)
 > Channel-independent → 天然支持跨城市迁移，无需邻接矩阵。
 
+### STSSDL ✅ 已就绪
+
+```bash
+python experiments/run_all.py --models STSSDL --settings all \
+    --epochs 100 --batch_size 64 --lr 1e-3
+```
+
+> 预计 GPU 单次训练 ~5-10 min，4 设置合计 ~20-40 min。
+> 模型结构（适配 Jimmy-7664/ST-SSDL 为 per-node 模式）：Historical Anchoring(减均值) → Patch encoder → Prototype Assignment(nearest) → concat(z, μ*) → FC → prediction
+> 默认 d_model=64, n_protos=8, α=0.01, β=0.1, ~35K 参数
+> **自定义 fit()**：triple loss = MSE + α·contrastive(push prototypes apart) + β·deviation(distance≈error)
+> Channel-independent → 天然支持跨城市迁移，无需邻接矩阵。
+
 ---
 
 ## 完成一个模型后的流程
@@ -290,6 +303,7 @@ python experiments/run_all.py --models DAN --settings all \
 | Group D | EVL | ~5-10 min | ~20-40 min |
 | Group D | EALGAP | ~5-10 min | ~20-40 min |
 | Group D | DAN | ~3-5 min | ~12-20 min |
+| Group D | STSSDL | ~5-10 min | ~20-40 min |
 
 > 以上为粗略估算，实际取决于 early stopping 触发时间。
 > Group B 模型因涉及图卷积 + 全节点输入 (batch, H, N)，显存/内存占用更大。
