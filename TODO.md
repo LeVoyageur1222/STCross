@@ -3,7 +3,7 @@
 > 本文件为 STCross 项目的实验主规划，所有后续实验开发均以此为准。
 > 相关文档：[运行指南](RUN_GUIDE.md) | [结果汇总](results/RESULTS.md)
 >
-> 最后更新：2026-06-25（Phase 2 全部完成 + Phase 3 重新规划）
+> 最后更新：2026-06-25（Phase 1-3 完成 + Phase 4 极端预测方法规划）
 
 ---
 
@@ -362,25 +362,126 @@
 
 ---
 
-## Phase 4：本文模型设计与实现
+## Phase 4：Group D Baselines（极端/异常事件预测方法）
 
-> **依赖**：Phase 1-2 全部完成（需充分了解各 baseline 优劣）
+> **目标**：完成专门针对极端/异常事件的时序预测方法，每个模型完成后立即运行 4 种实验设置。
+> **依赖**：Phase 0 ✅
+> **可与 Phase 1-3 穿插推进**
+>
+> **主题说明**：该组方法专注于**极端事件建模**——在预测任务中显式处理异常值（极端天气/节假日/突发事件）对时序模式的影响。
+> 与 Group C（分布鲁棒/可迁移）互补：Group C 从分布层面处理 train/test 不匹配，Group D 从极值建模层面处理异常事件的预测失准。
+>
+> **方法来源**：基于 `papers/09_Extreme_Traffic_Flow_Prediction.pdf` 调研的 13 篇极端预测论文，
+> 经 N-dependency 排查 + 代码可用性验证后选出以下 3 个候选。详见 `papers/ST00_note.md` 极端预测部分。
+>
+> **选择标准**：
+> 1. 可用于跨城市交通客流预测 ✓
+> 2. 不含 N-dependent 参数（节点嵌入、自适应邻接等） ✓
+> 3. 有开源代码且仓库含实际代码内容 ✓
+> 4. 经典论文 + 顶会发表 ✓
+
+### 4.1 EVL（Modeling Extreme Events in Time Series Prediction）
+
+> 论文：*Modeling Extreme Events in Time Series Prediction* (KDD 2019) — **经典奠基性工作**
+> 代码源：https://github.com/HuiqunHuang/EVL
+
+- [ ] 获取代码，评估适配难度
+- [ ] 核心机制：Extreme Value Loss + Memory Network
+  - **EVL 损失函数**：基于极值理论 (EVT)，用 BCE 形式预测极值点，加入尾部权重 `(1-u/γ)^γ`
+    - 解决欠拟合（MSE 的高斯核无法恢复厚尾）和过拟合（简单加权扭曲正常区域）
+  - **Memory Network**：存储历史极端事件模式原型，通过注意力机制融合记忆
+  - 总损失：L_main (MSE) + λ · L_EVL (极值二分类) + Memory attention loss
+  - EVL 是 loss 级增强，可叠加到任意 backbone → 极高通用性
+- [ ] 适配到 `TorchModel`，`input_mode="per_node"`（EVL 作为自定义损失 + Memory 模块）
+- [ ] 注册到 `model/registry.py`
+- [ ] **用户运行**：`python experiments/run_all.py --models EVL --settings all --epochs 100 --batch_size 64 --lr 1e-3`
+- [ ] 结果收集 → 更新 RESULTS.md
+
+> **参数量**：取决于 backbone + Memory 大小，预计 ~50-100K (N-independent)
+> **经典性**：首篇系统研究 DL 极端事件预测失败原因的工作，后续 EALGAP/SR-MTL/DAN 均引用
+
+### 4.2 EALGAP（Extreme-Aware Local-Global Attention）
+
+> 论文：*Extreme-Aware Local-Global Attention for Spatio-Temporal Urban Mobility Learning* (ICDE 2023)
+> 代码源：https://github.com/HuiqunHuang/EALGAP
+
+- [ ] 获取代码，评估适配难度
+- [ ] 核心机制：全局趋势 + 局部极端度解耦
+  - **全局趋势建模**：流量数据拟合指数分布 → PDF 生成 Q/K/V → Self-Attention → FC 预测
+  - **局部极端度建模**：同时段历史统计 z-score → 窗口极端度序列 → GRU 预测
+  - **最终预测**：global_trend + extreme_degree → ReLU → output
+  - **三类测试集**：全正常 / 含极端天气 / 含节假日（极重要评测设计参考）
+- [ ] 适配到 `TorchModel`，`input_mode="per_node"`
+- [ ] 注册到 `model/registry.py`
+- [ ] **用户运行**：`python experiments/run_all.py --models EALGAP --settings all --epochs 100 --batch_size 64 --lr 1e-3`
+- [ ] 结果收集 → 更新 RESULTS.md
+
+> **参数量**：预计 ~30-80K (N-independent, SA + GRU + FC 全共享)
+> **直接相关**：原始实验使用 NYC/CHI Bike + Taxi 数据，与本项目数据场景高度匹配
+> **评测设计可参考**：分 normal/extreme weather/holiday 三类 test 集分别评测
+
+### 4.3 DAN（Distance-weighted Auto-regularized Network）
+
+> 论文：*Learning from Polar Representation: An Extreme-Adaptive Model for Long-Term Time Series Forecasting* (AAAI 2024)
+> 代码源：https://github.com/davidanastasiu/dan
+
+- [ ] 获取代码，评估适配难度
+- [ ] 核心机制：远/近极性分解 + 距离加权损失
+  - **RepGen**：双通道编解码，分别生成 y_far (远离正常值) + y_near (靠近正常值)
+  - **RepMerg**：融合 far 隐变量 + 外部指示器 → 增强 far → 与 near 拼接 → FC 输出
+  - **距离加权损失**：w_f = (tanh(y))², w_n = (1-|tanh(y)|)²，自动平衡极端/正常样本
+  - **Kruskal-Wallis 采样**：极端数据不平衡重加权
+- [ ] 适配到 `TorchModel`，`input_mode="per_node"`
+- [ ] 注册到 `model/registry.py`
+- [ ] **用户运行**：`python experiments/run_all.py --models DAN --settings all --epochs 100 --batch_size 64 --lr 1e-3`
+- [ ] 结果收集 → 更新 RESULTS.md
+
+> **参数量**：预计 ~50-100K (N-independent, per-series 双通道)
+> **注意**：原始应用为水文径流预测，但远/近极性分解 + 距离加权损失是通用极端值处理技术
+
+### 4.4 ST-SSDL（Self-Supervised Deviation Learning）
+
+> 论文：*How Different from the Past? Spatio-Temporal Time Series Forecasting with Self-Supervised Deviation Learning* (NeurIPS 2025)
+> 代码源：https://github.com/Jimmy-7664/ST-SSDL
+
+- [ ] 获取代码，评估适配难度
+- [ ] 核心机制：偏差量化 + 可学习原型 + 自监督对比学习
+  - **Historical Anchoring**：将输入锚定到历史均值，提取偏差信号（数据统计，非学习参数）
+  - **Learnable Prototypes**：全局共享原型库离散化潜在空间，每个原型代表一种典型时序模式
+  - **Contrastive Loss**：增强原型间判别性
+  - **Deviation Loss**：量化输入表示与对应原型间的距离一致性，显式度量偏差程度
+  - 联合优化：prediction + contrastive + deviation
+  - 适配：原始论文可能使用 STGNN backbone，替换为 per-node encoder 以确保 N-independent
+- [ ] 适配到 `TorchModel`，`input_mode="per_node"`
+- [ ] 注册到 `model/registry.py`
+- [ ] **用户运行**：`python experiments/run_all.py --models STSSDL --settings all --epochs 100 --batch_size 64 --lr 1e-3`
+- [ ] 结果收集 → 更新 RESULTS.md
+
+> **参数量**：预计 ~30-80K (N-independent)，原型 + encoder 均为共享参数
+> **顶会最新**：NeurIPS 2025（东京大学 + 丰田汽车）
+> **与异常预测的天然关联**：偏差学习本质上就是量化"当前模式与典型模式的差异程度"——高偏差 = 异常时段，低偏差 = 正常时段
+
+---
+
+## Phase 5：本文模型设计与实现
+
+> **依赖**：Phase 1-4 全部完成（需充分了解各 baseline 优劣）
 > **本阶段在所有 baseline 完成后启动**
 
-### 4.1 模型设计
+### 5.1 模型设计
 
 - [ ] 基于 baseline 实验结论，确定创新点方向
 - [ ] 撰写设计文档
 - [ ] 确认方案
 
-### 4.2 模型实现
+### 5.2 模型实现
 
 - [ ] 实现核心模块
 - [ ] 适配 `TorchModel` + 注册
 - [ ] **用户运行**：4 种实验设置
 - [ ] 结果收集 → 更新 RESULTS.md
 
-### 4.3 消融实验
+### 5.3 消融实验
 
 - [ ] 设计消融变体
 - [ ] **用户运行**
@@ -388,23 +489,23 @@
 
 ---
 
-## Phase 5：综合分析与论文撰写
+## Phase 6：综合分析与论文撰写
 
-> **依赖**：Phase 1-4
+> **依赖**：Phase 1-5
 
-### 5.1 敏感性分析
+### 6.1 敏感性分析
 
 - [ ] 窗口大小：H/P ∈ {6, 12, 24}
 - [ ] 异常阈值：anomaly_min_ratio ∈ {0.0, 0.25, 0.5, 0.75}
 - [ ] 邻接矩阵 Top-K ∈ {5, 10, 20}
 
-### 5.2 可视化
+### 6.2 可视化
 
 - [ ] 预测曲线对比图
 - [ ] 跨城市迁移衰减柱状图
 - [ ] 各方法 full/anomaly/normal 雷达图
 
-### 5.3 论文撰写
+### 6.3 论文撰写
 
 - [ ] 实验设置、主实验表格、分析
 - [ ] 消融实验
@@ -417,17 +518,19 @@
 ```
 Phase 0 ✅
    │
-   ├──→ Phase 1 (Group A, 每个模型: 开发→用户运行→收集结果)
+   ├──→ Phase 1 (Group A 时序方法, 每个模型: 开发→用户运行→收集结果)
    │       │
-   ├──→ Phase 2 (Group B, 同上，可与 Phase 1 并行)
+   ├──→ Phase 2 (Group B 时空图方法, 同上，可与 Phase 1 并行)
    │       │
-   ├──→ Phase 3 (Group C, 穿插进行)
+   ├──→ Phase 3 (Group C 分布鲁棒方法, 穿插进行)
+   │       │
+   ├──→ Phase 4 (Group D 极端事件方法, 穿插进行)
    │       │
    │       ├── 全部 baseline 完成
    │       ↓
-   │    Phase 4 (本文模型)
+   │    Phase 5 (本文模型)
    │       │
-   └───────→ Phase 5 (分析 & 论文)
+   └───────→ Phase 6 (分析 & 论文)
 ```
 
 ---
@@ -439,4 +542,5 @@ Phase 0 ✅
 - [x] **Phase 1**：LSTM ✅ / DLinear ✅ / PatchTST ✅ / TimesNet ✅（代码就绪，待用户运行）
 - [x] **Phase 2**：STGCN ✅ / DCRNN ✅ / GWNET ✅ / STGODE ✅（代码就绪，待用户运行）
 - [x] **Phase 3**：TimeAlign ✅ / ProtoTS ✅ / ModernTCN ✅（代码就绪，待用户运行）
-- [ ] **Phase 4-5**：待开始
+- [ ] **Phase 4**：EVL → EALGAP → DAN → ST-SSDL（已规划，待开发）
+- [ ] **Phase 5-6**：待开始

@@ -2521,3 +2521,89 @@ $$\mathcal{L} = \lambda_p \mathcal{L}_{pred} + \lambda_c \mathcal{L}_{C}^{conf} 
 3. 对抗解耦 + 互信息最小化是实现表示分离的有效组合
 4. 异常场景（节假日/极端天气）的评估应关注分布偏移鲁棒性
 
+
+---
+
+## 极端/异常时间序列预测方法综述（来源：09_Extreme_Traffic_Flow_Prediction.pdf）
+
+> 以下论文来自异常交通流预测专题调研，围绕**极端事件建模**展开。
+
+### 论文总览
+
+| 编号 | 论文标题 | 会议/年份 | 核心方法 | 开源代码 | 跨城市可迁移性 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| EX01 | XTraffic Dataset | arXiv 2024 | 数据集（交通+事故对齐） | [Link](https://xaitraffic.github.io/) | — (数据集) |
+| EX02 | STContext Dataset | arXiv 2025 | 数据集（多维 context） | [Link](https://github.com/Liyue-Chen/STContext) | — (数据集) |
+| EX03 | **EVL** (Modeling Extreme Events in TSP) | **KDD 2019** | **EVL 损失 + Memory Network** | [✓](https://github.com/HuiqunHuang/EVL) | **✓ (per-series, N-independent)** |
+| EX04 | CHAT (Cross-Interaction Hierarchical Attention) | IJCAI 2020 | 双向 RNN + 跨维度注意力 | [✓](https://github.com/HuiqunHuang/CHAT) | ✗ (区域嵌入 N-dependent) |
+| EX05 | **EALGAP** (Extreme-Aware Local-Global Attention) | **ICDE 2023** | **全局趋势 SA + 局部极端度 GRU** | [✓](https://github.com/HuiqunHuang/EALGAP) | **✓ (shared models, per-node stats)** |
+| EX06 | MemeSTN (Meta-knowledge Memory ST Network) | WWW 2023 | Tweet count + Meta-knowledge + Memory | [✓](https://github.com/deepkashiwa20/MemeSTN) | △ (需社媒数据) |
+| EX07 | SR-MTL (Meta-Transfer-Learning for Extreme) | CIKM 2023 | 元迁移学习 + EVL | 无代码 | — |
+| EX08 | **DAN** (Distance-weighted Auto-regularized Network) | **AAAI 2024** | **远/近极性分解 + 距离加权损失** | [✓](https://github.com/davidanastasiu/dan) | **✓ (per-series, N-independent)** |
+| EX09 | STORM (Spatio-Temporal Context-Aware) | TITS 2024 | 多图卷积 + 事件冲激函数 | [✓](https://github.com/uctb/UCTB/tree/STORM) | ✗ (多图空间结构 N-dependent) |
+| EX10 | CausalMob (Causal Mobility + LLM) | KDD 2025 | LLM 意图提取 + 因果解混 | [✓](https://github.com/YangXiaojie1998/CausalMob) | ✗ (区域表征 N-dependent) |
+| EX11 | TransferTraj (Region/Task Transfer) | NeurIPS 2025 Oral | 轨迹学习迁移 | anonymous link | — (轨迹任务) |
+| EX12 | STRAP (Pattern Retrieval for OOD) | NeurIPS 2025 | 模式库检索增强 STGNN | [✓](https://github.com/HoweyZ/STRAP) | △ (STGNN backbone) |
+| EX13 | **ST-SSDL** (Self-Supervised Deviation Learning) | **NeurIPS 2025** | **可学习原型 + 偏差量化 + 对比学习** | [✓](https://github.com/Jimmy-7664/ST-SSDL) | **△ (原型 N-independent, 但 STGNN backbone)** |
+
+### 选入 baseline 的方法详细分析
+
+#### EX03: EVL — Modeling Extreme Events in Time Series Prediction (KDD 2019) ⭐⭐⭐⭐⭐
+
+**经典奠基性工作**，首次系统研究深度学习在极端事件时序预测中的失败原因。
+
+- **核心发现**：
+  - 欠拟合：MSE 等价于高斯核密度估计，尾部指数衰减，无法恢复真实的慢衰减厚尾分布
+  - 过拟合：人为增加极端样本权重会压缩正常区域估计，导致中段预测失准
+- **核心方法**：
+  - **Extreme Value Loss (EVL)**：基于极值理论的损失函数，用 BCE 形式预测是否为极值点，加入 EVT 尾部权重 `(1-u/γ)^γ`，γ=3 控制尾部厚度
+  - **Memory Network**：存储历史极端事件模式，通过注意力机制融合记忆与当前预测
+- **N-independent 分析**：EVL 是损失函数级别的增强，Memory 存储全局极端模式（不绑定特定节点），可应用于任意 per-series 模型 → **完全 N-independent**
+- **代码**：github.com/HuiqunHuang/EVL ✓ (Python, 356KB)
+
+#### EX05: EALGAP — Extreme-Aware Local-Global Attention (ICDE 2023) ⭐⭐⭐⭐⭐
+
+**直接使用 NYC/CHI 自行车和出租车数据**，与本项目数据场景高度匹配。
+
+- **核心方法**：
+  - 将流量序列解耦为 **全局趋势 + 局部异常**
+  - **全局趋势建模**：将所有流量数据拟合指数分布，利用概率密度生成 Q/K/V → Self-Attention → 全局趋势序列 → FC 预测
+  - **局部极端度建模**：基于同时间段（相同 weekday/weekend + 相同时段）历史统计均值/方差，计算 z-score 偏离度 → GRU 预测极端程度
+  - **最终预测**：全局趋势 + 极端程度 → ReLU → 输出
+- **评测设计（极重要参考）**：每个数据集构建 3 类 test 集：①全正常 ②含极端天气 ③含节假日
+- **N-independent 分析**：SA、GRU、FC 均为共享权重，极端度从同时段历史数据统计（非学习参数），无图结构 → **N-independent**
+- **代码**：github.com/HuiqunHuang/EALGAP ✓ (Python, 2.5MB)
+
+#### EX08: DAN — Distance-weighted Auto-regularized Network (AAAI 2024) ⭐⭐⭐⭐
+
+**提出远/近极性分解的优雅设计**，将极端值预测拆解为两个通道。
+
+- **核心方法**：
+  - 将预测目标分解为 **far (远离正常值)** 和 **near (靠近正常值)** 两个极性
+  - **RepGen**：双通道编解码，分别生成 y_far 和 y_near；同时预测外部指示器 y_i
+  - **RepMerg**：融合 far 通道隐变量 + 指示器 → 增强 far 预测 → 与 near 拼接 → FC 最终输出
+  - **距离加权损失**：w_f = (tanh(y))², w_n = (1-|tanh(y)|)²，正则化到均值 0 后按距离自动加权
+  - **Kruskal-Wallis 采样**：重加权不平衡极端数据
+- **N-independent 分析**：per-series 双通道处理，无图结构，全部共享权重 → **N-independent**
+- **代码**：github.com/davidanastasiu/dan ✓ (Python, 247KB)
+- **注意**：原始应用为水文径流预测，但距离加权极性分解技术是通用的极端值处理方法
+
+#### EX13: ST-SSDL — Self-Supervised Deviation Learning (NeurIPS 2025) ⭐⭐⭐⭐⭐
+
+**最新顶会工作**，显式建模当前数据与历史模式的"偏差"，与异常预测高度相关。
+
+- **核心方法**：
+  - **Historical Anchoring**：将每个输入锚定到其历史均值（数据计算，非学习参数），提取偏差信号
+  - **Learnable Prototypes**：可学习原型离散化潜在空间，每个原型代表一种典型时空模式（shared, N-independent）
+  - **Contrastive Loss**：增强不同原型间的判别性，防止模式坍缩
+  - **Deviation Loss**：正则化输入表示与对应原型间的距离一致性，量化偏差程度
+  - 联合优化：prediction loss + contrastive loss + deviation loss
+- **N-independent 分析**：
+  - 原型是全局共享的（不绑定特定节点）→ N-independent ✓
+  - 历史均值从数据统计（非学习参数）→ N-independent ✓
+  - 偏差/对比损失仅依赖表示空间距离 → N-independent ✓
+  - 原始论文可能使用 STGNN backbone，适配时可替换为 per-node backbone
+- **与异常预测的关联**：偏差学习本质上就是量化"当前模式与典型模式的差异程度"，这正是异常检测/预测的核心问题。高偏差 = 异常时段，低偏差 = 正常时段。
+- **代码**：github.com/Jimmy-7664/ST-SSDL ✓ (Python, ~177MB, 含多个PEMS数据集)
+- **数据集**：METR-LA, PEMS04/07/08 等标准交通数据集
+- **来源**：东京大学 + 丰田汽车
