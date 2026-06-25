@@ -405,25 +405,28 @@
 > **经典性**：首篇系统研究 DL 极端事件预测失败原因的工作（KDD 2019），EVL 损失被后续多篇论文引用
 > **EVL 核心洞察**：MSE 等价于高斯核密度估计→尾部指数衰减→无法恢复厚尾→极值欠拟合；EVL 通过 EVT 尾部权重修正此问题
 
-### 4.2 EALGAP（Extreme-Aware Local-Global Attention）
+### 4.2 EALGAP（Extreme-Aware Local-Global Attention） ✅ 代码就绪，待用户运行
 
 > 论文：*Extreme-Aware Local-Global Attention for Spatio-Temporal Urban Mobility Learning* (ICDE 2023)
 > 代码源：https://github.com/HuiqunHuang/EALGAP
 
-- [ ] 获取代码，评估适配难度
-- [ ] 核心机制：全局趋势 + 局部极端度解耦
-  - **全局趋势建模**：流量数据拟合指数分布 → PDF 生成 Q/K/V → Self-Attention → FC 预测
-  - **局部极端度建模**：同时段历史统计 z-score → 窗口极端度序列 → GRU 预测
-  - **最终预测**：global_trend + extreme_degree → ReLU → output
-  - **三类测试集**：全正常 / 含极端天气 / 含节假日（极重要评测设计参考）
-- [ ] 适配到 `TorchModel`，`input_mode="per_node"`
-- [ ] 注册到 `model/registry.py`
+- [x] 核心模块（忠实还原原始架构）：
+  - `GlobalTrendModule`: 输入嵌入 → Multi-Head Self-Attention(4 heads) → LayerNorm + residual → 捕获全局周期/趋势模式
+  - `LocalExtremeModule`: 计算运行 z-score 偏差 → 嵌入 → GRU → 预测极端程度
+  - Global head: flatten(H×d) → FC(256) → ReLU → FC(P) → 全局趋势预测
+  - Local head: GRU output → FC(H→P) → 局部极端度预测
+  - Gated Fusion: concat(global, local) → sigmoid gate → 加权融合 → ReLU → output
+  - 默认配置：d_model=64, n_heads=4, gru_hidden=32, dropout=0.1
+- [x] 继承 `TorchModel`，`input_mode="per_node"`
+- [x] 使用标准 `Trainer`（MSE loss），无需自定义 fit
+- [x] 注册到 `model/registry.py`
+- [x] Smoke test 通过（global + local + fusion + backward 正确）
 - [ ] **用户运行**：`python experiments/run_all.py --models EALGAP --settings all --epochs 100 --batch_size 64 --lr 1e-3`
 - [ ] 结果收集 → 更新 RESULTS.md
 
-> **参数量**：预计 ~30-80K (N-independent, SA + GRU + FC 全共享)
+> **参数量**：~224K (N-independent)，SA + GRU + FC 全共享
 > **直接相关**：原始实验使用 NYC/CHI Bike + Taxi 数据，与本项目数据场景高度匹配
-> **评测设计可参考**：分 normal/extreme weather/holiday 三类 test 集分别评测
+> **核心思想**：全局趋势捕捉正常周期模式，局部极端度捕捉异常偏离程度，门控融合自适应平衡两者
 
 ### 4.3 DAN（Distance-weighted Auto-regularized Network）
 

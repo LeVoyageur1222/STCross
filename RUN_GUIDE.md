@@ -233,6 +233,19 @@ python experiments/run_all.py --models EVL --settings all \
 > 极端标签自动生成：|y| > 90th percentile
 > Channel-independent → 天然支持跨城市迁移，无需邻接矩阵。
 
+### EALGAP ✅ 已就绪
+
+```bash
+python experiments/run_all.py --models EALGAP --settings all \
+    --epochs 100 --batch_size 64 --lr 1e-3
+```
+
+> 预计 GPU 单次训练 ~5-10 min，4 设置合计 ~20-40 min。
+> 模型结构（忠实 HuiqunHuang/EALGAP）：Global Trend(SA, 4 heads) + Local Extreme(z-score deviation + GRU) → Gated Fusion → ReLU → output
+> 默认 d_model=64, n_heads=4, gru_hidden=32, ~224K 参数
+> 使用标准 Trainer（MSE loss），无需自定义 fit。
+> Channel-independent → 天然支持跨城市迁移，无需邻接矩阵。
+
 ---
 
 ## 完成一个模型后的流程
@@ -262,6 +275,7 @@ python experiments/run_all.py --models EVL --settings all \
 | Group C | ProtoTS | ~3-5 min | ~12-20 min |
 | Group C | ModernTCN | ~3-5 min | ~12-20 min |
 | Group D | EVL | ~5-10 min | ~20-40 min |
+| Group D | EALGAP | ~5-10 min | ~20-40 min |
 
 > 以上为粗略估算，实际取决于 early stopping 触发时间。
 > Group B 模型因涉及图卷积 + 全节点输入 (batch, H, N)，显存/内存占用更大。

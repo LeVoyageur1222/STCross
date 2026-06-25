@@ -148,3 +148,12 @@ def build_evl(config: EvalConfig, train_config: TrainConfig):
         H=config.history_len, P=config.predict_len,
         train_config=train_config,
     )
+
+
+@register("EALGAP")
+def build_ealgap(config: EvalConfig, train_config: TrainConfig):
+    from model.ealgap import EALGAPModel
+    return EALGAPModel(
+        H=config.history_len, P=config.predict_len,
+        train_config=train_config,
+    )
