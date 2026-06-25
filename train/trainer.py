@@ -11,12 +11,12 @@ from tqdm import tqdm
 
 @dataclass
 class TrainConfig:
-    epochs: int = 100
+    epochs: int = 5000
     batch_size: int = 64
     lr: float = 1e-3
     weight_decay: float = 1e-4
-    early_stop_patience: int = 15
-    lr_patience: int = 5
+    early_stop_patience: int = 30
+    lr_patience: int = 10
     lr_factor: float = 0.5
     min_lr: float = 1e-6
     grad_clip_norm: float = 5.0

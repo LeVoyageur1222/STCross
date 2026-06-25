@@ -41,7 +41,7 @@ python experiments/run_all.py --models LSTM --settings all
 
 # 自定义训练参数
 python experiments/run_all.py --models LSTM --settings all \
-    --epochs 100 --batch_size 64 --lr 1e-3
+    --epochs 5000 --batch_size 64 --lr 1e-3
 
 # 运行所有已注册模型的全部实验
 python experiments/run_all.py --settings all
@@ -71,7 +71,7 @@ python experiments/run_all.py --models LSTM --settings same-city
 python experiments/run_model.py \
     --model LSTM \
     --source NYC --target NYC \
-    --epochs 100 --batch_size 64 --lr 1e-3 \
+    --epochs 5000 --batch_size 64 --lr 1e-3 \
     --output_dir results/
 ```
 
@@ -92,7 +92,7 @@ python experiments/run_all.py --models HA --settings all
 
 ```bash
 python experiments/run_all.py --models LSTM --settings all \
-    --epochs 100 --batch_size 64 --lr 1e-3
+    --epochs 5000 --batch_size 64 --lr 1e-3
 ```
 
 > 预计 MPS 单次训练 ~5-10 min，4 设置合计 ~20-40 min。
@@ -103,7 +103,7 @@ python experiments/run_all.py --models LSTM --settings all \
 
 ```bash
 python experiments/run_all.py --models DLinear --settings all \
-    --epochs 100 --batch_size 64 --lr 1e-3
+    --epochs 5000 --batch_size 64 --lr 1e-3
 ```
 
 > 预计 MPS 单次训练 ~3-5 min，4 设置合计 ~12-20 min。
@@ -114,7 +114,7 @@ python experiments/run_all.py --models DLinear --settings all \
 
 ```bash
 python experiments/run_all.py --models PatchTST --settings all \
-    --epochs 100 --batch_size 64 --lr 1e-4
+    --epochs 5000 --batch_size 64 --lr 1e-4
 ```
 
 > **注意**：PatchTST 使用较小学习率 `1e-4`（Transformer 对大 lr 敏感）。
@@ -126,7 +126,7 @@ python experiments/run_all.py --models PatchTST --settings all \
 
 ```bash
 python experiments/run_all.py --models TimesNet --settings all \
-    --epochs 100 --batch_size 16 --lr 1e-3
+    --epochs 5000 --batch_size 16 --lr 1e-3
 ```
 
 > **重要**：TimesNet 因 PyTorch MPS backward bug 自动回退至 **CPU** 训练（有 CUDA 时自动使用 GPU）。
@@ -139,7 +139,7 @@ python experiments/run_all.py --models TimesNet --settings all \
 
 ```bash
 python experiments/run_all.py --models TimeAlign --settings all \
-    --epochs 100 --batch_size 64 --lr 1e-3
+    --epochs 5000 --batch_size 64 --lr 1e-3
 ```
 
 > 预计 GPU 单次训练 ~5-10 min，4 设置合计 ~20-40 min。
@@ -152,7 +152,7 @@ python experiments/run_all.py --models TimeAlign --settings all \
 
 ```bash
 python experiments/run_all.py --models ProtoTS --settings all \
-    --epochs 100 --batch_size 64 --lr 1e-3
+    --epochs 5000 --batch_size 64 --lr 1e-3
 ```
 
 > 预计 GPU 单次训练 ~3-5 min，4 设置合计 ~12-20 min。
@@ -165,7 +165,7 @@ python experiments/run_all.py --models ProtoTS --settings all \
 
 ```bash
 python experiments/run_all.py --models ModernTCN --settings all \
-    --epochs 100 --batch_size 64 --lr 1e-3
+    --epochs 5000 --batch_size 64 --lr 1e-3
 ```
 
 > 预计 GPU 单次训练 ~3-5 min，4 设置合计 ~12-20 min。
@@ -178,7 +178,7 @@ python experiments/run_all.py --models ModernTCN --settings all \
 
 ```bash
 python experiments/run_all.py --models EVL --settings all \
-    --epochs 100 --batch_size 64 --lr 1e-3
+    --epochs 5000 --batch_size 64 --lr 1e-3
 ```
 
 > 预计 GPU 单次训练 ~5-10 min，4 设置合计 ~20-40 min。
@@ -192,7 +192,7 @@ python experiments/run_all.py --models EVL --settings all \
 
 ```bash
 python experiments/run_all.py --models EALGAP --settings all \
-    --epochs 100 --batch_size 64 --lr 1e-3
+    --epochs 5000 --batch_size 64 --lr 1e-3
 ```
 
 > 预计 GPU 单次训练 ~5-10 min，4 设置合计 ~20-40 min。
@@ -205,7 +205,7 @@ python experiments/run_all.py --models EALGAP --settings all \
 
 ```bash
 python experiments/run_all.py --models DAN --settings all \
-    --epochs 100 --batch_size 64 --lr 1e-3
+    --epochs 5000 --batch_size 64 --lr 1e-3
 ```
 
 > 预计 GPU 单次训练 ~3-5 min，4 设置合计 ~12-20 min。
@@ -218,7 +218,7 @@ python experiments/run_all.py --models DAN --settings all \
 
 ```bash
 python experiments/run_all.py --models STSSDL --settings all \
-    --epochs 100 --batch_size 64 --lr 1e-3
+    --epochs 5000 --batch_size 64 --lr 1e-3
 ```
 
 > 预计 GPU 单次训练 ~5-10 min，4 设置合计 ~20-40 min。
