@@ -1,0 +1,38 @@
+{
+  "model": "ModernTCN",
+  "source_city": "NYC",
+  "target_city": "NYC",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 1.7573,
+      "RMSE": 3.9696,
+      "MAPE": 74.48,
+      "PCC": 0.6767,
+      "R2": 0.436
+    },
+    "anomaly": {
+      "count": 507,
+      "MAE": 1.5337,
+      "RMSE": 3.2589,
+      "MAPE": 82.8,
+      "PCC": 0.6195,
+      "R2": 0.3767
+    },
+    "normal": {
+      "count": 5254,
+      "MAE": 1.7789,
+      "RMSE": 4.0315,
+      "MAPE": 73.75,
+      "PCC": 0.6807,
+      "R2": 0.4386
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "model": "STSSDL",
+  "source_city": "NYC",
+  "target_city": "NYC",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 1.8309,
+      "RMSE": 4.2937,
+      "MAPE": 76.71,
+      "PCC": 0.6237,
+      "R2": 0.3401
+    },
+    "anomaly": {
+      "count": 507,
+      "MAE": 1.4986,
+      "RMSE": 3.4243,
+      "MAPE": 80.55,
+      "PCC": 0.5818,
+      "R2": 0.3118
+    },
+    "normal": {
+      "count": 5254,
+      "MAE": 1.8629,
+      "RMSE": 4.3684,
+      "MAPE": 76.37,
+      "PCC": 0.6261,
+      "R2": 0.3409
+    }
+  }
+}
