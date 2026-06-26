@@ -56,7 +56,8 @@ class Evaluator:
 
         source_scaler = PerNodeStandardScaler().fit(
             source_flow[s_train_s:s_train_e].astype(np.float64))
-        source_flow_norm = source_scaler.transform(source_flow.astype(np.float64))
+        source_flow_norm = source_scaler.transform(
+            source_flow.astype(np.float64), clip_range=10.0)
 
         train_X, train_Y, _ = create_sliding_windows(
             source_flow_norm, source_mask, H, P,
@@ -114,7 +115,8 @@ class Evaluator:
         else:
             target_scaler = PerNodeStandardScaler().fit(
                 target_flow[train_s:train_e].astype(np.float64))
-            target_flow_norm = target_scaler.transform(target_flow_f64)
+            target_flow_norm = target_scaler.transform(
+                target_flow_f64, clip_range=10.0)
             test_X, _, _ = create_sliding_windows(
                 target_flow_norm, target_mask, H, P,
                 test_s, test_e, cfg.anomaly_min_ratio)

@@ -36,6 +36,22 @@ EXPERIMENT_MATRIX = [
     {"source": "CHI", "target": "NYC", "tag": "cross-city"},
 ]
 
+# Per-model recommended learning rates (based on architecture + empirical tuning).
+# RNN/MLP models can handle larger LR; Transformers need smaller LR.
+MODEL_LR_DEFAULTS = {
+    "LSTM":      1e-2,   # RNN, diagnosed: 4x faster convergence than 1e-3
+    "DLinear":   1e-3,   # Tiny Linear (312 params), paper standard
+    "PatchTST":  1e-4,   # Transformer, paper standard (sensitive to large LR)
+    "TimesNet":  1e-3,   # CNN+FFT, TSLib default
+    "TimeAlign": 1e-3,   # Linear encoder + alignment, moderate
+    "ProtoTS":   1e-3,   # MLP-Mixer + prototype, moderate
+    "ModernTCN": 1e-3,   # Modern CNN, ICLR paper standard
+    "EVL":       1e-3,   # LSTM + Memory + dual loss, moderate
+    "EALGAP":    1e-3,   # SA + GRU, moderate
+    "DAN":       1e-3,   # CNN+LSTM, standard
+    "STSSDL":    1e-3,   # LSTM + prototype + triplet, moderate
+}
+
 
 def _config_matches(loaded: dict, cfg: EvalConfig) -> bool:
     return (loaded.get("history_len") == cfg.history_len and
@@ -135,13 +151,17 @@ def _run_per_node_model(model_name, settings, output_dir, train_config, force):
 
         # Build model and train ONCE on this source
         config = EvalConfig(source_city=source, target_city=pending_targets[0])
+        # Apply model-specific LR if user didn't override --lr
+        model_lr = MODEL_LR_DEFAULTS.get(model_name, train_config.lr)
+        model_train_config = TrainConfig(
+            **{**train_config.__dict__, "lr": model_lr})
         print(f"\n{'='*60}")
-        print(f"  Training: {model_name} on {source}")
+        print(f"  Training: {model_name} on {source} (lr={model_lr:.0e})")
         print(f"  Will evaluate on targets: {pending_targets}")
         print(f"{'='*60}")
 
         try:
-            model = MODEL_REGISTRY[model_name](config, train_config)
+            model = MODEL_REGISTRY[model_name](config, model_train_config)
             evaluator = Evaluator(config)
             evaluator.train(model, source)
         except Exception:
@@ -236,7 +256,11 @@ def main():
     parser.add_argument("--output_dir", type=str, default="results")
     parser.add_argument("--epochs", type=int, default=5000)
     parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--lr", type=float, default=None,
+                        help="Learning rate (if None, uses per-model default)")
+    parser.add_argument("--lr_scheduler", type=str, default="cosine",
+                        choices=["cosine", "plateau"],
+                        help="LR scheduler: cosine (default) or plateau")
     parser.add_argument("--force", action="store_true",
                         help="Force rerun all experiments, ignoring cached results")
     args = parser.parse_args()
@@ -246,7 +270,10 @@ def main():
     else:
         settings = [s for s in EXPERIMENT_MATRIX if s["tag"] in args.settings]
 
-    train_config = TrainConfig(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr)
+    base_lr = args.lr if args.lr is not None else 1e-3
+    train_config = TrainConfig(
+        epochs=args.epochs, batch_size=args.batch_size, lr=base_lr,
+        lr_scheduler=args.lr_scheduler)
 
     all_results = run_experiments(args.models, settings, args.output_dir, train_config,
                                   force=args.force)

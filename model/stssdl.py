@@ -30,7 +30,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from model.torch_base import TorchModel
-from train.trainer import TrainConfig, set_seed, TrainingLoop
+from train.trainer import TrainConfig, set_seed, TrainingLoop, build_scheduler
 from data_preprocess.torch_dataset import build_dataloader
 
 
@@ -243,9 +243,7 @@ class STSSDLModel(TorchModel):
 
         optimizer = torch.optim.Adam(
             self.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", patience=cfg.lr_patience,
-            factor=cfg.lr_factor, min_lr=cfg.min_lr)
+        scheduler = build_scheduler(optimizer, cfg)
 
         TrainingLoop.run(
             model=self,

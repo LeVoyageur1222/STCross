@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 import numpy as np
@@ -23,6 +23,8 @@ class TrainConfig:
     checkpoint_dir: str = "checkpoints"
     device: str = "auto"
     seed: int = 42
+    lr_scheduler: str = "cosine"
+    cosine_t_max: int = 100
 
     def resolve_device(self) -> torch.device:
         if self.device != "auto":
@@ -39,6 +41,37 @@ def set_seed(seed: int):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
+
+# ---------------------------------------------------------------------------
+# Scheduler factory
+# ---------------------------------------------------------------------------
+
+def build_scheduler(optimizer: torch.optim.Optimizer,
+                    config: TrainConfig) -> object:
+    """Build LR scheduler based on config.lr_scheduler.
+
+    Supported:
+        - "cosine": CosineAnnealingLR (smooth decay, matches modern TS papers)
+        - "plateau": ReduceLROnPlateau (val-loss-based, classic approach)
+    """
+    if config.lr_scheduler == "cosine":
+        return torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=config.cosine_t_max, eta_min=config.min_lr)
+    elif config.lr_scheduler == "plateau":
+        return torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", patience=config.lr_patience,
+            factor=config.lr_factor, min_lr=config.min_lr)
+    else:
+        raise ValueError(f"Unknown lr_scheduler: {config.lr_scheduler!r}")
+
+
+def _scheduler_step(scheduler, val_loss: float):
+    """Step the scheduler, handling both plateau (needs val_loss) and others."""
+    if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+        scheduler.step(val_loss)
+    else:
+        scheduler.step()
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +94,7 @@ class TrainingLoop:
         train_loader: DataLoader,
         val_loader: DataLoader,
         optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.lr_scheduler.ReduceLROnPlateau,
+        scheduler,
         train_step_fn: Callable,
         val_step_fn: Callable,
         config: TrainConfig,
@@ -70,24 +103,7 @@ class TrainingLoop:
         extra_log: str = "",
         pre_epoch_hook: Optional[Callable] = None,
     ) -> str:
-        """Run full training loop with early stopping and checkpointing.
-
-        Args:
-            model: PyTorch model (already moved to device).
-            train_loader, val_loader: DataLoaders.
-            optimizer, scheduler: Pre-configured optimizer and scheduler.
-            train_step_fn: (model, X, Y, device) -> (loss, metrics_dict).
-            val_step_fn: (model, X, Y, device) -> (loss, metrics_dict).
-            config: TrainConfig.
-            model_name: Used for checkpoint filename.
-            device: torch.device.
-            extra_log: Optional string appended to the initial log line.
-            pre_epoch_hook: Optional (model, epoch) -> None called before each
-                training epoch.
-
-        Returns:
-            Path to the best checkpoint.
-        """
+        """Run full training loop with early stopping and checkpointing."""
         set_seed(config.seed)
         os.makedirs(config.checkpoint_dir, exist_ok=True)
         ckpt_path = os.path.abspath(os.path.join(config.checkpoint_dir, f"{model_name}_best.pt"))
@@ -145,7 +161,7 @@ class TrainingLoop:
                     n_val += 1
 
             val_loss = val_total / max(n_val, 1)
-            scheduler.step(val_loss)
+            _scheduler_step(scheduler, val_loss)
 
             lr_now = optimizer.param_groups[0]["lr"]
             improved = val_loss < best_val_loss
@@ -179,13 +195,11 @@ class TrainingLoop:
 # ---------------------------------------------------------------------------
 
 def _default_train_step_fn(model, X, Y, device, criterion):
-    """Default train_step_fn: model(X) -> criterion(pred, Y)."""
     pred = model(X)
     loss = criterion(pred, Y)
     return loss, {}
 
 def _default_val_step_fn(model, X, Y, device, criterion):
-    """Default val_step_fn: model(X) -> criterion(pred, Y)."""
     pred = model(X)
     loss = criterion(pred, Y)
     return loss, {}
@@ -202,9 +216,7 @@ class Trainer:
         optimizer = torch.optim.Adam(
             model.parameters(), lr=self.config.lr,
             weight_decay=self.config.weight_decay)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", patience=self.config.lr_patience,
-            factor=self.config.lr_factor, min_lr=self.config.min_lr)
+        scheduler = build_scheduler(optimizer, self.config)
         criterion = nn.MSELoss()
 
         return TrainingLoop.run(
