@@ -1,10 +1,23 @@
-"""Batch experiment runner: run multiple models × city settings and compile results."""
+"""Batch experiment runner: train once per source city, evaluate on all targets.
+
+Optimization vs. naive 4-setting loop:
+    Naive: 4 trainings per model (NYC->NYC, NYC->CHI, CHI->CHI, CHI->NYC)
+    Optimized: 2 trainings per model (train on NYC -> eval NYC+CHI;
+               train on CHI -> eval CHI+NYC)
+
+For per_node models (Group A/C/D), the same source-trained model is reused
+for both same-city and cross-city evaluation, eliminating redundant training.
+
+HA baseline is special: it builds its lookup from the TARGET city's flow, so
+it cannot share training across targets. HA is evaluated per-target directly.
+"""
 
 import os
 import sys
 import json
 import argparse
 import traceback
+from collections import defaultdict
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -13,6 +26,7 @@ from eval.config import EvalConfig
 from eval.evaluator import Evaluator
 from eval.reporter import Reporter
 from model.registry import MODEL_REGISTRY
+from model.ha import HAModel
 from train.trainer import TrainConfig
 
 EXPERIMENT_MATRIX = [
@@ -28,11 +42,133 @@ def _config_matches(loaded: dict, cfg: EvalConfig) -> bool:
             loaded.get("predict_len") == cfg.predict_len and
             loaded.get("anomaly_min_ratio") == cfg.anomaly_min_ratio and
             loaded.get("train_steps") == cfg.train_steps and
-            "test_steps" in loaded)
+            loaded.get("test_steps") is not None)
 
 
-def run_experiments(model_names: list, settings: list, output_dir: str = "results",
-                    train_config: TrainConfig = None, force: bool = False):
+def _find_existing_result(model_name: str, source: str, target: str,
+                          output_dir: str, cfg: EvalConfig):
+    """Return loaded result dict if a valid cached result exists, else None.
+
+    Iterates cached files in reverse-lexicographic order (newest first) and
+    returns the first whose config matches, so an older matching result is
+    not missed when a newer non-matching one exists.
+    """
+    pattern = f"{model_name}_{source}_to_{target}_"
+    existing = sorted(
+        [f for f in os.listdir(output_dir)
+         if f.startswith(pattern) and f.endswith(".json")],
+        reverse=True)
+    for fname in existing:
+        try:
+            with open(os.path.join(output_dir, fname)) as f:
+                loaded = json.load(f)
+            if _config_matches(loaded, cfg):
+                return loaded
+        except (json.JSONDecodeError, KeyError):
+            continue
+    return None
+
+
+def _run_ha(settings, output_dir, train_config, force):
+    """Run HA baseline: per-target evaluation (source is irrelevant for HA)."""
+    all_results = []
+    seen_targets = set()
+    for setting in settings:
+        source, target = setting["source"], setting["target"]
+        if target in seen_targets:
+            continue
+        seen_targets.add(target)
+
+        config = EvalConfig(source_city=target, target_city=target)
+        if not force:
+            cached = _find_existing_result("HA", target, target, output_dir, config)
+            if cached is not None:
+                print(f"[SKIP] HA {target}->{target} (cached)")
+                all_results.append(cached)
+                continue
+
+        print(f"\n{'='*60}")
+        print(f"  Running: HA | {target} (same-city)")
+        print(f"{'='*60}")
+        try:
+            model = MODEL_REGISTRY["HA"](config, train_config)
+            evaluator = Evaluator(config)
+            results = evaluator.run(model)
+            Reporter.print_results(results)
+            Reporter.save_results(results, output_dir)
+            all_results.append(results)
+        except Exception:
+            print(f"[ERROR] HA {target} failed:")
+            traceback.print_exc()
+    return all_results
+
+
+def _run_per_node_model(model_name, settings, output_dir, train_config, force):
+    """Run a per_node model: train once per source, evaluate on all targets."""
+    all_results = []
+
+    # Group settings by source city
+    by_source = defaultdict(list)
+    for s in settings:
+        by_source[s["source"]].append(s)
+
+    for source, source_settings in by_source.items():
+        targets = [s["target"] for s in source_settings]
+
+        # Check which targets still need evaluation
+        pending_targets = []
+        if not force:
+            for target in targets:
+                config = EvalConfig(source_city=source, target_city=target)
+                cached = _find_existing_result(model_name, source, target,
+                                                output_dir, config)
+                if cached is not None:
+                    print(f"[SKIP] {model_name} {source}->{target} (cached)")
+                    all_results.append(cached)
+                else:
+                    pending_targets.append(target)
+        else:
+            pending_targets = list(targets)
+
+        if not pending_targets:
+            continue
+
+        # Build model and train ONCE on this source
+        config = EvalConfig(source_city=source, target_city=pending_targets[0])
+        print(f"\n{'='*60}")
+        print(f"  Training: {model_name} on {source}")
+        print(f"  Will evaluate on targets: {pending_targets}")
+        print(f"{'='*60}")
+
+        try:
+            model = MODEL_REGISTRY[model_name](config, train_config)
+            evaluator = Evaluator(config)
+            evaluator.train(model, source)
+        except Exception:
+            print(f"[ERROR] {model_name} training on {source} failed:")
+            traceback.print_exc()
+            continue
+
+        # Evaluate on each pending target
+        for target in pending_targets:
+            print(f"\n  Evaluating: {model_name} | {source} -> {target}")
+            try:
+                eval_config = EvalConfig(source_city=source, target_city=target)
+                evaluator = Evaluator(eval_config)
+                results = evaluator.evaluate(model, source, target)
+                Reporter.print_results(results)
+                Reporter.save_results(results, output_dir)
+                all_results.append(results)
+            except Exception:
+                print(f"[ERROR] {model_name} {source}->{target} evaluation failed:")
+                traceback.print_exc()
+                continue
+
+    return all_results
+
+
+def run_experiments(model_names, settings, output_dir="results",
+                    train_config=None, force=False):
     train_config = train_config or TrainConfig()
     os.makedirs(output_dir, exist_ok=True)
     all_results = []
@@ -42,60 +178,24 @@ def run_experiments(model_names: list, settings: list, output_dir: str = "result
             print(f"[SKIP] Unknown model: {model_name}")
             continue
 
-        for setting in settings:
-            source, target = setting["source"], setting["target"]
-            tag = setting.get("tag", "")
-            config = EvalConfig(source_city=source, target_city=target)
-
-            # Check for existing valid results (skip if --force not set)
-            skip = False
-            if not force:
-                result_pattern = f"{model_name}_{source}_to_{target}_"
-                existing = sorted(f for f in os.listdir(output_dir)
-                                  if f.startswith(result_pattern) and f.endswith(".json"))
-                if existing:
-                    try:
-                        with open(os.path.join(output_dir, existing[-1])) as f:
-                            loaded = json.load(f)
-                        if _config_matches(loaded, config):
-                            print(f"[SKIP] {model_name} {source}->{target} "
-                                  f"(matched: {existing[-1]})")
-                            all_results.append(loaded)
-                            skip = True
-                    except (json.JSONDecodeError, KeyError):
-                        pass
-            if skip:
-                continue
-
-            print(f"\n{'='*60}")
-            print(f"  Running: {model_name} | {source} -> {target} ({tag})")
-            print(f"{'='*60}")
-
-            try:
-                build_fn = MODEL_REGISTRY[model_name]
-                model = build_fn(config, train_config)
-                evaluator = Evaluator(config)
-                results = evaluator.run(model)
-                Reporter.print_results(results)
-                Reporter.save_results(results, output_dir)
-                all_results.append(results)
-            except Exception:
-                print(f"[ERROR] {model_name} {source}->{target} failed:")
-                traceback.print_exc()
-                continue
+        if model_name == "HA":
+            all_results.extend(_run_ha(settings, output_dir, train_config, force))
+        else:
+            all_results.extend(_run_per_node_model(
+                model_name, settings, output_dir, train_config, force))
 
     return all_results
 
 
-def compile_summary(all_results: list, output_dir: str = "results"):
+def compile_summary(all_results, output_dir="results"):
     if not all_results:
         return
 
     lines = []
     header = (f"| {'Model':<12} | {'Setting':<12} | {'Subset':<8} | {'Count':>6} | "
               f"{'MAE':>8} | {'RMSE':>8} | {'MAPE%':>8} | {'PCC':>8} | {'R²':>8} |")
-    sep = "|" + "-" * 13 + "|" + "-" * 13 + "|" + "-" * 9 + "|" + "-" * 7 + "|" + \
-          ("-" * 9 + "|") * 5
+    sep = "|" + "-" * 14 + "|" + "-" * 14 + "|" + "-" * 10 + "|" + "-" * 8 + "|" + \
+          ("-" * 10 + "|") * 5
     lines.append(header)
     lines.append(sep)
 
@@ -134,7 +234,7 @@ def main():
                         default=["same-city"],
                         help="Experiment settings to run")
     parser.add_argument("--output_dir", type=str, default="results")
-    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--epochs", type=int, default=5000)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--force", action="store_true",
@@ -149,7 +249,7 @@ def main():
     train_config = TrainConfig(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr)
 
     all_results = run_experiments(args.models, settings, args.output_dir, train_config,
-                              force=args.force)
+                                  force=args.force)
     compile_summary(all_results, args.output_dir)
 
 

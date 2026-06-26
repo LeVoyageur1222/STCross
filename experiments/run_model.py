@@ -2,6 +2,9 @@
 
 Usage:
     python experiments/run_model.py --model HA --source NYC --target NYC [options]
+
+For non-HA models, trains once on the source city and evaluates on the target
+city. For HA, the source is ignored (HA builds its lookup from the target city).
 """
 
 import argparse
@@ -25,7 +28,7 @@ def main():
     parser.add_argument("--history_len", type=int, default=12)
     parser.add_argument("--predict_len", type=int, default=12)
     parser.add_argument("--anomaly_min_ratio", type=float, default=0.5)
-    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--epochs", type=int, default=5000)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--output_dir", type=str, default="results/")
@@ -44,7 +47,9 @@ def main():
     model = build_fn(config, train_config)
     evaluator = Evaluator(config)
 
-    results = evaluator.run(model)
+    # Use the new train-once + evaluate interface
+    evaluator.train(model, args.source)
+    results = evaluator.evaluate(model, args.source, args.target)
     Reporter.print_results(results)
     Reporter.save_results(results, args.output_dir)
 
