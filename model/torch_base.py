@@ -7,7 +7,7 @@ import torch.nn as nn
 from tqdm import tqdm
 
 from model.base import BaseModel
-from train.trainer import Trainer, TrainConfig
+from train.trainer import Trainer, TrainConfig, get_log_path, log_msg
 from data_preprocess.torch_dataset import build_dataloader
 
 
@@ -73,7 +73,7 @@ class TorchModel(BaseModel, nn.Module):
         source = getattr(self, "_source_city", "")
         return f"{self.name}_{source}" if source else self.name
 
-    def load_checkpoint(self, source_city: str) -> str:
+    def load_checkpoint(self, source_city: str, log_path: str = None) -> str:
         """Load a previously-trained checkpoint for the given source city.
 
         Used by --eval_only mode: skip training, load existing best weights,
@@ -98,11 +98,14 @@ class TorchModel(BaseModel, nn.Module):
             ckpt_path, map_location=self._device, weights_only=True))
         self.to(self._device)
         self.eval()
+        tag = self.name
+        log_msg(f"[EVAL ONLY] Loaded checkpoint: {ckpt_path}", log_path, tag)
         print(f"  [EVAL ONLY] Loaded checkpoint: {ckpt_path}")
         return ckpt_path
 
     def fit(self, train_X: np.ndarray, train_Y: np.ndarray,
-            val_X: np.ndarray, val_Y: np.ndarray) -> None:
+            val_X: np.ndarray, val_Y: np.ndarray,
+            log_path: str = None) -> None:
         cfg = self.train_config
         train_loader = build_dataloader(
             train_X, train_Y, np.zeros(len(train_X), dtype=bool),
@@ -111,12 +114,18 @@ class TorchModel(BaseModel, nn.Module):
             val_X, val_Y, np.zeros(len(val_X), dtype=bool),
             batch_size=cfg.batch_size, shuffle=False)
 
+        ckpt_name = self._get_checkpoint_name()
+        if log_path is None:
+            source = getattr(self, "_source_city", "")
+            if source:
+                log_path = get_log_path(cfg, self.name, source)
+
         print(f"[{self.name}] Training on {self._device} | "
               f"train={len(train_loader.dataset)}, val={len(val_loader.dataset)}")
 
         trainer = Trainer(cfg)
         trainer.train(self, train_loader, val_loader,
-                       model_name=self._get_checkpoint_name())
+                       model_name=ckpt_name, log_path=log_path)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         self.eval()

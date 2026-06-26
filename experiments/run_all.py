@@ -27,7 +27,7 @@ from eval.evaluator import Evaluator
 from eval.reporter import Reporter
 from model.registry import MODEL_REGISTRY
 from model.ha import HAModel
-from train.trainer import TrainConfig
+from train.trainer import TrainConfig, get_log_path
 
 EXPERIMENT_MATRIX = [
     {"source": "NYC", "target": "NYC", "tag": "same-city"},
@@ -186,10 +186,11 @@ def _run_per_node_model(model_name, settings, output_dir, train_config, force,
         try:
             model = MODEL_REGISTRY[model_name](config, model_train_config)
             evaluator = Evaluator(config)
+            log_path = get_log_path(model_train_config, model_name, source)
             if use_checkpoint:
-                model.load_checkpoint(source)
+                model.load_checkpoint(source, log_path=log_path)
             else:
-                evaluator.train(model, source)
+                evaluator.train(model, source, log_path=log_path)
         except Exception:
             print(f"[ERROR] {model_name} {'load' if use_checkpoint else 'train'} "
                   f"on {source} failed:")
@@ -202,7 +203,8 @@ def _run_per_node_model(model_name, settings, output_dir, train_config, force,
             try:
                 eval_config = EvalConfig(source_city=source, target_city=target)
                 evaluator = Evaluator(eval_config)
-                results = evaluator.evaluate(model, source, target)
+                results = evaluator.evaluate(model, source, target,
+                                             log_path=log_path)
                 Reporter.print_results(results)
                 Reporter.save_results(results, output_dir)
                 all_results.append(results)

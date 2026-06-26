@@ -53,7 +53,30 @@ results/
 
 checkpoints/
 └── {Model}_{Source}_best.pt      # 每城市训练的最佳 checkpoint（不互相覆盖）
+
+logs/
+└── {Model}_{Source}_train.log    # 每模型每源城市的训练+评测日志
 ```
+
+### 日志文件格式
+
+每个 `{Model}_{Source}_train.log` 包含完整的训练和评测记录：
+
+```
+[2026-06-26 18:21:10] [DLinear] Training started on mps | train=15313, val=5137
+[2026-06-26 18:21:10] [DLinear] Config: epochs=5000, batch_size=64, lr=1e-03, scheduler=cosine, ...
+[2026-06-26 18:21:13] [DLinear] Epoch   1 | train_loss=0.670180 | val_loss=2.007195 | lr=1.00e-03 *
+[2026-06-26 18:21:17] [DLinear] Epoch   2 | train_loss=0.577225 | val_loss=1.941743 | lr=9.99e-04 *
+...
+[2026-06-26 18:21:17] [DLinear] Checkpoint saved: /path/to/DLinear_NYC_best.pt
+[2026-06-26 18:21:17] [DLinear] Evaluation: NYC -> NYC
+[2026-06-26 18:21:22] [DLinear] Results NYC->NYC [full]: MAE=2.1386 RMSE=4.5974 ...
+[2026-06-26 18:21:22] [DLinear] Results NYC->NYC [anomaly]: MAE=1.7513 RMSE=3.5676 ...
+[2026-06-26 18:21:22] [DLinear] Results NYC->NYC [normal]: MAE=2.176 RMSE=4.6848 ...
+```
+
+> `*` 标记表示该 epoch 验证集 loss 有改善（checkpoint 已更新）。
+> 日志同时输出到控制台和文件，方便即时监控和事后分析。
 
 ---
 

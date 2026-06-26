@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Callable, Optional
 
 import numpy as np
@@ -21,6 +22,7 @@ class TrainConfig:
     min_lr: float = 1e-6
     grad_clip_norm: float = 5.0
     checkpoint_dir: str = "checkpoints"
+    log_dir: str = "logs"
     device: str = "auto"
     seed: int = 42
     lr_scheduler: str = "cosine"
@@ -44,17 +46,39 @@ def set_seed(seed: int):
 
 
 # ---------------------------------------------------------------------------
+# Logging helper
+# ---------------------------------------------------------------------------
+
+def log_msg(msg: str, log_path: str = None, tag: str = ""):
+    """Print to stdout and optionally append to a log file with timestamp.
+
+    Args:
+        msg: Message to log.
+        log_path: If provided, append to this file.
+        tag: Optional tag prepended after timestamp (e.g. model name).
+    """
+    print(msg)
+    if log_path:
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        prefix = f"[{datetime.now():%Y-%m-%d %H:%M:%S}]"
+        if tag:
+            prefix += f" [{tag}]"
+        with open(log_path, "a") as f:
+            f.write(f"{prefix} {msg}\n")
+
+
+def get_log_path(config: TrainConfig, model_name: str, source_city: str) -> str:
+    """Construct the log file path for a model trained on a source city."""
+    return os.path.abspath(
+        os.path.join(config.log_dir, f"{model_name}_{source_city}_train.log"))
+
+
+# ---------------------------------------------------------------------------
 # Scheduler factory
 # ---------------------------------------------------------------------------
 
 def build_scheduler(optimizer: torch.optim.Optimizer,
                     config: TrainConfig) -> object:
-    """Build LR scheduler based on config.lr_scheduler.
-
-    Supported:
-        - "cosine": CosineAnnealingLR (smooth decay, matches modern TS papers)
-        - "plateau": ReduceLROnPlateau (val-loss-based, classic approach)
-    """
     if config.lr_scheduler == "cosine":
         return torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=config.cosine_t_max, eta_min=config.min_lr)
@@ -67,7 +91,6 @@ def build_scheduler(optimizer: torch.optim.Optimizer,
 
 
 def _scheduler_step(scheduler, val_loss: float):
-    """Step the scheduler, handling both plateau (needs val_loss) and others."""
     if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
         scheduler.step(val_loss)
     else:
@@ -79,14 +102,7 @@ def _scheduler_step(scheduler, val_loss: float):
 # ---------------------------------------------------------------------------
 
 class TrainingLoop:
-    """Shared training loop for models with custom loss functions.
-
-    Eliminates code duplication between the standalone Trainer and the 5
-    custom fit() methods (EVL, TimeAlign, ProtoTS, DAN, STSSDL).
-
-    train_step_fn(model, X, Y, device) -> (loss, metrics_dict)
-    val_step_fn(model, X, Y, device) -> (loss, metrics_dict)
-    """
+    """Shared training loop for models with custom loss functions."""
 
     @staticmethod
     def run(
@@ -102,18 +118,28 @@ class TrainingLoop:
         device: torch.device,
         extra_log: str = "",
         pre_epoch_hook: Optional[Callable] = None,
+        log_path: str = None,
     ) -> str:
-        """Run full training loop with early stopping and checkpointing."""
+        """Run full training loop with early stopping, checkpointing, and logging."""
         set_seed(config.seed)
         os.makedirs(config.checkpoint_dir, exist_ok=True)
         ckpt_path = os.path.abspath(os.path.join(config.checkpoint_dir, f"{model_name}_best.pt"))
 
+        # Extract tag for log lines (strip source suffix if present)
+        tag = model_name.rsplit("_", 1)[0] if "_" in model_name else model_name
+
         best_val_loss = float("inf")
         patience_counter = 0
 
-        print(f"[{model_name}] Training on {device} | "
-              f"train={len(train_loader.dataset)}, "
-              f"val={len(val_loader.dataset)}{extra_log}")
+        log_msg(
+            f"Training started on {device} | "
+            f"train={len(train_loader.dataset)}, val={len(val_loader.dataset)}{extra_log}",
+            log_path, tag)
+        log_msg(
+            f"Config: epochs={config.epochs}, batch_size={config.batch_size}, "
+            f"lr={config.lr:.0e}, scheduler={config.lr_scheduler}, "
+            f"early_stop_patience={config.early_stop_patience}",
+            log_path, tag)
 
         for epoch in range(1, config.epochs + 1):
             if pre_epoch_hook is not None:
@@ -131,8 +157,10 @@ class TrainingLoop:
                 loss, _ = train_step_fn(model, X, Y, device)
 
                 if torch.isnan(loss) or torch.isinf(loss):
-                    print(f"  WARNING: NaN/Inf loss detected at epoch {epoch}, "
-                          f"batch {n_train+1}. Skipping batch.")
+                    log_msg(
+                        f"WARNING: NaN/Inf loss at epoch {epoch}, "
+                        f"batch {n_train+1}. Skipping.",
+                        log_path, tag)
                     continue
 
                 optimizer.zero_grad()
@@ -166,8 +194,10 @@ class TrainingLoop:
             lr_now = optimizer.param_groups[0]["lr"]
             improved = val_loss < best_val_loss
             marker = " *" if improved else ""
-            print(f"  Epoch {epoch:3d} | train_loss={train_loss:.6f} | "
-                  f"val_loss={val_loss:.6f} | lr={lr_now:.2e}{marker}")
+            log_msg(
+                f"Epoch {epoch:3d} | train_loss={train_loss:.6f} | "
+                f"val_loss={val_loss:.6f} | lr={lr_now:.2e}{marker}",
+                log_path, tag)
 
             if improved:
                 best_val_loss = val_loss
@@ -176,17 +206,21 @@ class TrainingLoop:
             else:
                 patience_counter += 1
                 if patience_counter >= config.early_stop_patience:
-                    print(f"  Early stopping at epoch {epoch} "
-                          f"(best val_loss={best_val_loss:.6f})")
+                    log_msg(
+                        f"Early stopping at epoch {epoch} "
+                        f"(best val_loss={best_val_loss:.6f})",
+                        log_path, tag)
                     break
 
         if not os.path.exists(ckpt_path):
-            raise RuntimeError(
-                f"No checkpoint saved — val_loss never improved "
-                f"(best_val_loss={best_val_loss:.6f})")
+            msg = (f"No checkpoint saved — val_loss never improved "
+                   f"(best_val_loss={best_val_loss:.6f})")
+            log_msg(f"ERROR: {msg}", log_path, tag)
+            raise RuntimeError(msg)
 
         model.load_state_dict(torch.load(
             ckpt_path, map_location=device, weights_only=True))
+        log_msg(f"Checkpoint saved: {ckpt_path}", log_path, tag)
         return ckpt_path
 
 
@@ -211,7 +245,8 @@ class Trainer:
         self.device = config.resolve_device()
 
     def train(self, model: nn.Module, train_loader: DataLoader,
-              val_loader: DataLoader, model_name: str = "model") -> str:
+              val_loader: DataLoader, model_name: str = "model",
+              log_path: str = None) -> str:
         model = model.to(self.device)
         optimizer = torch.optim.Adam(
             model.parameters(), lr=self.config.lr,
@@ -230,4 +265,5 @@ class Trainer:
             config=self.config,
             model_name=model_name,
             device=self.device,
+            log_path=log_path,
         )

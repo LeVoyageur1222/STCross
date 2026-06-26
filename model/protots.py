@@ -21,7 +21,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from model.torch_base import TorchModel
-from train.trainer import TrainConfig, set_seed, TrainingLoop, build_scheduler
+from train.trainer import TrainConfig, set_seed, TrainingLoop, build_scheduler, log_msg, get_log_path
 from data_preprocess.torch_dataset import build_dataloader
 
 
@@ -139,7 +139,8 @@ class ProtoTSModel(TorchModel):
         return loss, {}
 
     def fit(self, train_X: np.ndarray, train_Y: np.ndarray,
-            val_X: np.ndarray, val_Y: np.ndarray) -> None:
+            val_X: np.ndarray, val_Y: np.ndarray,
+            log_path: str = None) -> None:
         """Custom training with L1 + entropy regularization."""
         cfg = self.train_config
         set_seed(cfg.seed)
@@ -170,4 +171,5 @@ class ProtoTSModel(TorchModel):
             model_name=self._get_checkpoint_name(),
             device=device,
             extra_log=f" | n_protos={self.n_protos}",
+            log_path=log_path,
         )

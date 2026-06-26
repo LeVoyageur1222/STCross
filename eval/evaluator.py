@@ -8,18 +8,12 @@ from data_preprocess.normalizer import PerNodeStandardScaler
 from metrics.metrics import calc_mae, calc_rmse, calc_mape, calc_pcc, calc_r2
 from model.base import BaseModel
 from model.ha import HAModel
+from train.trainer import log_msg, get_log_path
 from .config import EvalConfig
 
 
 class Evaluator:
-    """Train-once-per-source, evaluate-on-multiple-targets evaluator.
-
-    For per_node models (Group A/C/D): train() fits on source city data once,
-    evaluate() runs inference on any target city's test set.
-
-    For HAModel: train() is a no-op (HA builds its lookup from target city flow
-    during evaluate(), so it cannot share training across targets).
-    """
+    """Train-once-per-source, evaluate-on-multiple-targets evaluator."""
 
     def __init__(self, config: EvalConfig):
         self.config = config
@@ -28,22 +22,21 @@ class Evaluator:
     # Training
     # ------------------------------------------------------------------
 
-    def train(self, model: BaseModel, source_city: str) -> None:
-        """Train model on source_city's train/val split.
-
-        For HAModel, this is a no-op: HA computes its lookup table from the
-        target city's flow during evaluate() (HA is target-specific by design).
-        """
+    def train(self, model: BaseModel, source_city: str,
+              log_path: str = None) -> None:
+        """Train model on source_city's train/val split."""
         if isinstance(model, HAModel):
             return
 
         cfg = self.config
         H, P = cfg.history_len, cfg.predict_len
 
-        # Tag the model with the source city so checkpoints are saved as
-        # {name}_{source}_best.pt (avoids overwriting between city trainings).
         if hasattr(model, "_source_city"):
             model._source_city = source_city
+
+        # Compute log path if not provided
+        if log_path is None:
+            log_path = get_log_path(model.train_config, model.name, source_city)
 
         source_flow = load_flow(source_city, cfg.flow_dir,
                                 cfg.start_date, cfg.end_date, cfg.freq_min)
@@ -66,22 +59,24 @@ class Evaluator:
             source_flow_norm, source_mask, H, P,
             s_val_s, s_val_e, cfg.anomaly_min_ratio)
 
-        model.fit(train_X, train_Y, val_X, val_Y)
+        # Pass log_path to model.fit() (TorchModel and custom fit models)
+        try:
+            model.fit(train_X, train_Y, val_X, val_Y, log_path=log_path)
+        except TypeError:
+            model.fit(train_X, train_Y, val_X, val_Y)
 
     # ------------------------------------------------------------------
     # Evaluation
     # ------------------------------------------------------------------
 
-    def evaluate(self, model: BaseModel, source_city: str, target_city: str) -> dict:
-        """Evaluate trained model on target_city's test split.
-
-        For HAModel: builds lookup from target train flow, then predicts
-        using timestamps (source_city is irrelevant for HA).
-        For other models: normalizes test input by target scaler, runs
-        model.predict(), inverse-transforms with target scaler.
-        """
+    def evaluate(self, model: BaseModel, source_city: str, target_city: str,
+                 log_path: str = None) -> dict:
+        """Evaluate trained model on target_city's test split."""
         cfg = self.config
         H, P = cfg.history_len, cfg.predict_len
+
+        tag = model.name
+        log_msg(f"Evaluation: {source_city} -> {target_city}", log_path, tag)
 
         target_flow = load_flow(target_city, cfg.flow_dir,
                                 cfg.start_date, cfg.end_date, cfg.freq_min)
@@ -158,18 +153,25 @@ class Evaluator:
                 "R2": round(calc_r2(y_true, y_pred), 4),
             }
 
+        # Log evaluation results
+        for subset, m in results["subsets"].items():
+            if m["count"] == 0:
+                continue
+            log_msg(
+                f"Results {source_city}->{target_city} [{subset}]: "
+                f"MAE={m['MAE']} RMSE={m['RMSE']} MAPE={m['MAPE']}% "
+                f"PCC={m['PCC']} R2={m['R2']}",
+                log_path, tag)
+
         return results
 
     # ------------------------------------------------------------------
     # Legacy single-setting entry point (backward compat)
     # ------------------------------------------------------------------
 
-    def run(self, model: BaseModel) -> dict:
-        """Train on source_city and evaluate on target_city (single setting).
-
-        Convenience wrapper: equivalent to train(model, source) then
-        evaluate(model, source, target).
-        """
+    def run(self, model: BaseModel, log_path: str = None) -> dict:
+        """Train on source_city and evaluate on target_city (single setting)."""
         cfg = self.config
-        self.train(model, cfg.source_city)
-        return self.evaluate(model, cfg.source_city, cfg.target_city)
+        self.train(model, cfg.source_city, log_path=log_path)
+        return self.evaluate(model, cfg.source_city, cfg.target_city,
+                             log_path=log_path)
