@@ -1,6 +1,6 @@
 {
   "model": "DLinear",
-  "source_city": "CHI",
+  "source_city": "NYC",
   "target_city": "NYC",
   "history_len": 12,
   "predict_len": 12,
@@ -12,27 +12,27 @@
   "subsets": {
     "full": {
       "count": 5761,
-      "MAE": 2.1525,
-      "RMSE": 4.63,
-      "MAPE": 78.18,
-      "PCC": 0.511,
-      "R2": 0.2327
+      "MAE": 2.1292,
+      "RMSE": 4.5859,
+      "MAPE": 78.54,
+      "PCC": 0.5189,
+      "R2": 0.2472
     },
     "anomaly": {
       "count": 507,
-      "MAE": 1.7617,
-      "RMSE": 3.5889,
-      "MAPE": 81.35,
-      "PCC": 0.5007,
-      "R2": 0.244
+      "MAE": 1.7421,
+      "RMSE": 3.5588,
+      "MAPE": 81.19,
+      "PCC": 0.5125,
+      "R2": 0.2567
     },
     "normal": {
       "count": 5254,
-      "MAE": 2.1902,
-      "RMSE": 4.7183,
-      "MAPE": 77.91,
-      "PCC": 0.5118,
-      "R2": 0.231
+      "MAE": 2.1666,
+      "RMSE": 4.6731,
+      "MAPE": 78.31,
+      "PCC": 0.5193,
+      "R2": 0.2457
     }
   }
 }

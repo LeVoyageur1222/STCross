@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import os
 
 import numpy as np
 import torch
@@ -72,6 +73,34 @@ class TorchModel(BaseModel, nn.Module):
         source = getattr(self, "_source_city", "")
         return f"{self.name}_{source}" if source else self.name
 
+    def load_checkpoint(self, source_city: str) -> str:
+        """Load a previously-trained checkpoint for the given source city.
+
+        Used by --eval_only mode: skip training, load existing best weights,
+        then evaluate. The checkpoint must have been saved by a prior
+        ``fit()`` call with the same source city.
+
+        Returns:
+            Path to the loaded checkpoint.
+
+        Raises:
+            FileNotFoundError: if no checkpoint exists for this source city.
+        """
+        self._source_city = source_city
+        ckpt_name = self._get_checkpoint_name()
+        ckpt_path = os.path.abspath(os.path.join(
+            self.train_config.checkpoint_dir, f"{ckpt_name}_best.pt"))
+        if not os.path.exists(ckpt_path):
+            raise FileNotFoundError(
+                f"No checkpoint found for {self.name} on {source_city}: "
+                f"{ckpt_path}")
+        self.load_state_dict(torch.load(
+            ckpt_path, map_location=self._device, weights_only=True))
+        self.to(self._device)
+        self.eval()
+        print(f"  [EVAL ONLY] Loaded checkpoint: {ckpt_path}")
+        return ckpt_path
+
     def fit(self, train_X: np.ndarray, train_Y: np.ndarray,
             val_X: np.ndarray, val_Y: np.ndarray) -> None:
         cfg = self.train_config
@@ -94,9 +123,19 @@ class TorchModel(BaseModel, nn.Module):
         self.to(self._device)
         X_tensor = torch.from_numpy(X).float()
         results = []
-        # Use 2x training batch_size for inference: inference is cheaper (no grads),
-        # so larger batches improve throughput without memory pressure.
-        batch_size = self.train_config.batch_size * 2
+        # For per_node models, forward() reshapes (B, H, N) → (B*N, H, 1).
+        # The effective batch seen by _net_forward is B*N, which can exceed
+        # CUDA kernel grid limits (e.g., nn.TransformerEncoder's fused kernel
+        # ~65536) when B is large. Cap the effective batch to a safe limit.
+        max_effective_batch = 32768
+        if self.input_mode == "per_node":
+            N = X_tensor.shape[2]
+            batch_size = min(
+                self.train_config.batch_size * 2,
+                max(1, max_effective_batch // max(N, 1))
+            )
+        else:
+            batch_size = self.train_config.batch_size * 2
         n_batches = (len(X_tensor) + batch_size - 1) // batch_size
         with torch.no_grad():
             for i in tqdm(range(0, len(X_tensor), batch_size),

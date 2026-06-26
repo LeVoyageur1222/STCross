@@ -97,6 +97,32 @@ python experiments/run_all.py --models LSTM --settings all \
 python experiments/run_all.py --models LSTM --settings all --force
 ```
 
+**仅评测（跳过训练）**：使用 `--eval_only` 参数加载已有 checkpoint，跳过训练直接评测：
+```bash
+# 场景：训练已完成但评测之前崩溃了，修复后只跑评测不重训
+python experiments/run_all.py --models PatchTST --settings all --eval_only
+
+# 场景：强制重新评测所有 target（不重训，忽略已有 JSON）
+python experiments/run_all.py --models PatchTST --settings all --eval_only --force
+```
+
+> `--eval_only` 行为：检测 `checkpoints/{Model}_{Source}_best.pt` 是否存在。
+> 存在 → 加载 checkpoint 跳过训练，直接评测。
+> 不存在 → 自动回退到正常训练 + 评测。
+
+**行为矩阵**：
+
+| `--eval_only` | `--force` | checkpoint | JSON 缓存 | 行为 |
+|---------------|----------|-----------|----------|------|
+| ❌ | ❌ | — | ✅ | 跳过（缓存命中） |
+| ❌ | ❌ | — | ❌ | 训练 + 评测 |
+| ❌ | ✅ | — | — | 训练 + 重新评测 |
+| ✅ | ❌ | ✅ | ✅ | 跳过（缓存命中） |
+| ✅ | ❌ | ✅ | ❌ | **加载 checkpoint + 评测** |
+| ✅ | ❌ | ❌ | ❌ | 回退：训练 + 评测 |
+| ✅ | ✅ | ✅ | — | **加载 checkpoint + 重新评测** |
+| ✅ | ✅ | ❌ | — | 回退：训练 + 重新评测 |
+
 **如需重跑某个实验**，删除对应 JSON 文件后重新运行：
 ```bash
 rm results/LSTM_NYC_to_NYC_*.json

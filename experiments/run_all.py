@@ -119,8 +119,13 @@ def _run_ha(settings, output_dir, train_config, force):
     return all_results
 
 
-def _run_per_node_model(model_name, settings, output_dir, train_config, force):
-    """Run a per_node model: train once per source, evaluate on all targets."""
+def _run_per_node_model(model_name, settings, output_dir, train_config, force,
+                        eval_only=False):
+    """Run a per_node model: train once per source, evaluate on all targets.
+
+    With eval_only=True: if a checkpoint exists for the source city, load it
+    instead of retraining. Falls back to normal train+eval if no checkpoint.
+    """
     all_results = []
 
     # Group settings by source city
@@ -149,23 +154,45 @@ def _run_per_node_model(model_name, settings, output_dir, train_config, force):
         if not pending_targets:
             continue
 
-        # Build model and train ONCE on this source
+        # Build model and train ONCE on this source (or load checkpoint)
         config = EvalConfig(source_city=source, target_city=pending_targets[0])
-        # Apply model-specific LR if user didn't override --lr
         model_lr = MODEL_LR_DEFAULTS.get(model_name, train_config.lr)
         model_train_config = TrainConfig(
             **{**train_config.__dict__, "lr": model_lr})
-        print(f"\n{'='*60}")
-        print(f"  Training: {model_name} on {source} (lr={model_lr:.0e})")
-        print(f"  Will evaluate on targets: {pending_targets}")
-        print(f"{'='*60}")
+
+        # Check if we can skip training via --eval_only
+        ckpt_path = os.path.join(
+            model_train_config.checkpoint_dir,
+            f"{model_name}_{source}_best.pt")
+        use_checkpoint = eval_only and os.path.exists(ckpt_path)
+
+        if use_checkpoint:
+            print(f"\n{'='*60}")
+            print(f"  Eval-only: {model_name} | loading {source} checkpoint")
+            print(f"  Will evaluate on targets: {pending_targets}")
+            print(f"{'='*60}")
+        else:
+            if eval_only:
+                print(f"\n{'='*60}")
+                print(f"  No checkpoint for {model_name} on {source}, "
+                      f"falling back to training")
+                print(f"{'='*60}")
+            else:
+                print(f"\n{'='*60}")
+                print(f"  Training: {model_name} on {source} (lr={model_lr:.0e})")
+                print(f"  Will evaluate on targets: {pending_targets}")
+                print(f"{'='*60}")
 
         try:
             model = MODEL_REGISTRY[model_name](config, model_train_config)
             evaluator = Evaluator(config)
-            evaluator.train(model, source)
+            if use_checkpoint:
+                model.load_checkpoint(source)
+            else:
+                evaluator.train(model, source)
         except Exception:
-            print(f"[ERROR] {model_name} training on {source} failed:")
+            print(f"[ERROR] {model_name} {'load' if use_checkpoint else 'train'} "
+                  f"on {source} failed:")
             traceback.print_exc()
             continue
 
@@ -188,7 +215,7 @@ def _run_per_node_model(model_name, settings, output_dir, train_config, force):
 
 
 def run_experiments(model_names, settings, output_dir="results",
-                    train_config=None, force=False):
+                    train_config=None, force=False, eval_only=False):
     train_config = train_config or TrainConfig()
     os.makedirs(output_dir, exist_ok=True)
     all_results = []
@@ -202,7 +229,8 @@ def run_experiments(model_names, settings, output_dir="results",
             all_results.extend(_run_ha(settings, output_dir, train_config, force))
         else:
             all_results.extend(_run_per_node_model(
-                model_name, settings, output_dir, train_config, force))
+                model_name, settings, output_dir, train_config, force,
+                eval_only=eval_only))
 
     return all_results
 
@@ -263,6 +291,9 @@ def main():
                         help="LR scheduler: cosine (default) or plateau")
     parser.add_argument("--force", action="store_true",
                         help="Force rerun all experiments, ignoring cached results")
+    parser.add_argument("--eval_only", action="store_true",
+                        help="Load existing checkpoint instead of retraining "
+                             "(falls back to training if no checkpoint)")
     args = parser.parse_args()
 
     if "all" in args.settings:
@@ -276,7 +307,7 @@ def main():
         lr_scheduler=args.lr_scheduler)
 
     all_results = run_experiments(args.models, settings, args.output_dir, train_config,
-                                  force=args.force)
+                                  force=args.force, eval_only=args.eval_only)
     compile_summary(all_results, args.output_dir)
 
 
