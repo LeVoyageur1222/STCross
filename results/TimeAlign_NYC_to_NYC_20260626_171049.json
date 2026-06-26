@@ -1,0 +1,38 @@
+{
+  "model": "TimeAlign",
+  "source_city": "NYC",
+  "target_city": "NYC",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 1.9733,
+      "RMSE": 4.587,
+      "MAPE": 80.63,
+      "PCC": 0.5347,
+      "R2": 0.2468
+    },
+    "anomaly": {
+      "count": 507,
+      "MAE": 1.5921,
+      "RMSE": 3.6355,
+      "MAPE": 82.22,
+      "PCC": 0.5096,
+      "R2": 0.2242
+    },
+    "normal": {
+      "count": 5254,
+      "MAE": 2.0101,
+      "RMSE": 4.6686,
+      "MAPE": 80.49,
+      "PCC": 0.5356,
+      "R2": 0.2472
+    }
+  }
+}

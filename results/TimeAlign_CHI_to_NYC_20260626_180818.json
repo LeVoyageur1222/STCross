@@ -1,0 +1,38 @@
+{
+  "model": "TimeAlign",
+  "source_city": "CHI",
+  "target_city": "NYC",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 2.1677,
+      "RMSE": 5.0827,
+      "MAPE": 85.83,
+      "PCC": 0.4126,
+      "R2": 0.0753
+    },
+    "anomaly": {
+      "count": 507,
+      "MAE": 1.6703,
+      "RMSE": 3.9315,
+      "MAPE": 85.44,
+      "PCC": 0.4246,
+      "R2": 0.0928
+    },
+    "normal": {
+      "count": 5254,
+      "MAE": 2.2157,
+      "RMSE": 5.1802,
+      "MAPE": 85.86,
+      "PCC": 0.4113,
+      "R2": 0.0731
+    }
+  }
+}
