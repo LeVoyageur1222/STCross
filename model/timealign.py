@@ -353,6 +353,6 @@ class TimeAlignModel(TorchModel):
             train_step_fn=lambda m, X, Y, d: self._train_step_fn(X, Y, d),
             val_step_fn=lambda m, X, Y, d: self._val_step_fn(X, Y, d),
             config=cfg,
-            model_name=self.name,
+            model_name=self._get_checkpoint_name(),
             device=device,
         )

@@ -34,6 +34,7 @@ class TorchModel(BaseModel, nn.Module):
             raise ValueError(f"Invalid input_mode: {self.input_mode!r}")
         self.train_config = train_config or TrainConfig()
         self._device = self.train_config.resolve_device()
+        self._source_city = ""  # set by Evaluator.train() for per-source checkpoints
 
     @abstractmethod
     def _net_forward(self, X: torch.Tensor) -> torch.Tensor:
@@ -60,6 +61,17 @@ class TorchModel(BaseModel, nn.Module):
             return out.reshape(B, N, P).permute(0, 2, 1)  # (B, P, N)
         return self._net_forward(X)
 
+    def _get_checkpoint_name(self) -> str:
+        """Checkpoint name with optional source-city suffix.
+
+        If Evaluator.train() sets ``self._source_city`` before calling fit(),
+        the checkpoint is saved as ``{name}_{source}_best.pt`` so that
+        different cities' best checkpoints don't overwrite each other.
+        Falls back to ``self.name`` when unset (legacy callers).
+        """
+        source = getattr(self, "_source_city", "")
+        return f"{self.name}_{source}" if source else self.name
+
     def fit(self, train_X: np.ndarray, train_Y: np.ndarray,
             val_X: np.ndarray, val_Y: np.ndarray) -> None:
         cfg = self.train_config
@@ -74,7 +86,8 @@ class TorchModel(BaseModel, nn.Module):
               f"train={len(train_loader.dataset)}, val={len(val_loader.dataset)}")
 
         trainer = Trainer(cfg)
-        trainer.train(self, train_loader, val_loader, model_name=self.name)
+        trainer.train(self, train_loader, val_loader,
+                       model_name=self._get_checkpoint_name())
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         self.eval()

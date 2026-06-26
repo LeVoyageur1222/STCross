@@ -256,7 +256,7 @@ class STSSDLModel(TorchModel):
             train_step_fn=lambda m, X, Y, d: self._train_step(X, Y, d),
             val_step_fn=lambda m, X, Y, d: self._val_step(X, Y, d),
             config=cfg,
-            model_name=self.name,
+            model_name=self._get_checkpoint_name(),
             device=device,
             extra_log=f" | n_protos={self.n_protos}, alpha={self.alpha}, beta={self.beta}",
         )

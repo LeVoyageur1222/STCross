@@ -40,6 +40,11 @@ class Evaluator:
         cfg = self.config
         H, P = cfg.history_len, cfg.predict_len
 
+        # Tag the model with the source city so checkpoints are saved as
+        # {name}_{source}_best.pt (avoids overwriting between city trainings).
+        if hasattr(model, "_source_city"):
+            model._source_city = source_city
+
         source_flow = load_flow(source_city, cfg.flow_dir,
                                 cfg.start_date, cfg.end_date, cfg.freq_min)
         source_mask = load_anomaly_mask(source_city, cfg.mask_dir_holiday,
