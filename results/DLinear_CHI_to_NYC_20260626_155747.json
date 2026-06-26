@@ -1,0 +1,38 @@
+{
+  "model": "DLinear",
+  "source_city": "CHI",
+  "target_city": "NYC",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 2.1525,
+      "RMSE": 4.63,
+      "MAPE": 78.18,
+      "PCC": 0.511,
+      "R2": 0.2327
+    },
+    "anomaly": {
+      "count": 507,
+      "MAE": 1.7617,
+      "RMSE": 3.5889,
+      "MAPE": 81.35,
+      "PCC": 0.5007,
+      "R2": 0.244
+    },
+    "normal": {
+      "count": 5254,
+      "MAE": 2.1902,
+      "RMSE": 4.7183,
+      "MAPE": 77.91,
+      "PCC": 0.5118,
+      "R2": 0.231
+    }
+  }
+}

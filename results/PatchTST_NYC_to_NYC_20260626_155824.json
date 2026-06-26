@@ -1,0 +1,38 @@
+{
+  "model": "PatchTST",
+  "source_city": "NYC",
+  "target_city": "NYC",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 1.895,
+      "RMSE": 4.2565,
+      "MAPE": 79.69,
+      "PCC": 0.6017,
+      "R2": 0.3515
+    },
+    "anomaly": {
+      "count": 507,
+      "MAE": 1.608,
+      "RMSE": 3.4966,
+      "MAPE": 82.19,
+      "PCC": 0.5479,
+      "R2": 0.2824
+    },
+    "normal": {
+      "count": 5254,
+      "MAE": 1.9227,
+      "RMSE": 4.3228,
+      "MAPE": 79.47,
+      "PCC": 0.6043,
+      "R2": 0.3546
+    }
+  }
+}
