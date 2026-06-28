@@ -1,0 +1,38 @@
+{
+  "model": "TimesNet",
+  "source_city": "CHI",
+  "target_city": "NYC",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 2.0244,
+      "RMSE": 4.5329,
+      "MAPE": 76.94,
+      "PCC": 0.5392,
+      "R2": 0.2645
+    },
+    "anomaly": {
+      "count": 507,
+      "MAE": 1.6462,
+      "RMSE": 3.606,
+      "MAPE": 77.02,
+      "PCC": 0.506,
+      "R2": 0.2368
+    },
+    "normal": {
+      "count": 5254,
+      "MAE": 2.0609,
+      "RMSE": 4.6125,
+      "MAPE": 76.93,
+      "PCC": 0.5405,
+      "R2": 0.2651
+    }
+  }
+}
