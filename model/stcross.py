@@ -451,10 +451,17 @@ class STCrossModel(TorchModel):
                         leave=False, unit="batch")
             for batch in pbar:
                 X, Y, b_in, b_fut = [b.to(device) for b in batch]
-                delta_true = Y.squeeze(-1) - b_fut.squeeze(-1)
+                # Per_node reshape: (B, H, N) → (B*N, H, 1)
+                B_s, H_s, N_s = X.shape
+                X_flat = X.permute(0, 2, 1).reshape(B_s * N_s, H_s, 1)
+                Y_flat = Y.permute(0, 2, 1).reshape(B_s * N_s, self.P, 1)
+                b_in_flat = b_in.permute(0, 2, 1).reshape(B_s * N_s, H_s, 1)
+                b_fut_flat = b_fut.permute(0, 2, 1).reshape(B_s * N_s, self.P, 1)
 
-                y_pred = self._net_forward(X, b_in, b_fut)
-                loss, metrics = self._compute_loss(y_pred, Y, delta_true)
+                delta_true = Y_flat.squeeze(-1) - b_fut_flat.squeeze(-1)
+
+                y_pred = self._net_forward(X_flat, b_in_flat, b_fut_flat)
+                loss, metrics = self._compute_loss(y_pred, Y_flat, delta_true)
 
                 if torch.isnan(loss) or torch.isinf(loss):
                     log_msg(f"WARNING: NaN/Inf loss at epoch {epoch}, "
@@ -470,7 +477,7 @@ class STCrossModel(TorchModel):
                 mic_step += 1
                 if mic_step % 3 == 0:
                     with torch.no_grad():
-                        self._net_forward(X, b_in, b_fut)
+                        self._net_forward(X_flat, b_in_flat, b_fut_flat)
                     z_s = self._cache['z_s'].detach()
                     z_a = self._cache['z_a'].detach()
                     mic_loss = -self.mic(z_s, z_a)  # maximize MI estimate
@@ -493,8 +500,14 @@ class STCrossModel(TorchModel):
                                   desc=f"Val   {epoch:3d}/{cfg.epochs}",
                                   leave=False, unit="batch"):
                     X, Y, b_in, b_fut = [b.to(device) for b in batch]
-                    y_pred = self._net_forward(X, b_in, b_fut)
-                    val_total += F.mse_loss(y_pred, Y).item()
+                    # Per_node reshape
+                    B_s, H_s, N_s = X.shape
+                    X_flat = X.permute(0, 2, 1).reshape(B_s * N_s, H_s, 1)
+                    Y_flat = Y.permute(0, 2, 1).reshape(B_s * N_s, self.P, 1)
+                    b_in_flat = b_in.permute(0, 2, 1).reshape(B_s * N_s, H_s, 1)
+                    b_fut_flat = b_fut.permute(0, 2, 1).reshape(B_s * N_s, self.P, 1)
+                    y_pred = self._net_forward(X_flat, b_in_flat, b_fut_flat)
+                    val_total += F.mse_loss(y_pred, Y_flat).item()
                     n_val += 1
 
             val_loss = val_total / max(n_val, 1)
@@ -532,7 +545,12 @@ class STCrossModel(TorchModel):
         log_msg(f"Checkpoint saved: {ckpt_path}", log_path, self.name)
 
     def _build_loader(self, X, Y, b_input, b_future, batch_size, shuffle):
-        """Build DataLoader with (X, Y, B_input, B_future) tuples."""
+        """Build DataLoader with (X, Y, B_input, B_future) tuples.
+
+        IMPORTANT: Do NOT per_node reshape here — keep (B, H, N) batches.
+        Reshape happens inside the training loop per batch, same as standard
+        per_node models. This avoids 820x batch count inflation.
+        """
         from torch.utils.data import TensorDataset, DataLoader
 
         X_t = torch.from_numpy(X).float()
@@ -544,14 +562,8 @@ class STCrossModel(TorchModel):
             b_in_t = torch.zeros_like(X_t)  # (B, H, N)
             b_fut_t = torch.zeros(X_t.size(0), self.P, X_t.size(2))  # (B, P, N)
 
-        # Per_node reshape: (B, H, N) → (B*N, H, 1)
-        B, H, N = X_t.shape
-        X_flat = X_t.permute(0, 2, 1).reshape(B * N, H, 1)
-        Y_flat = Y_t.permute(0, 2, 1).reshape(B * N, self.P, 1)
-        b_in_flat = b_in_t.permute(0, 2, 1).reshape(B * N, H, 1)
-        b_fut_flat = b_fut_t.permute(0, 2, 1).reshape(B * N, self.P, 1)
-
-        dataset = TensorDataset(X_flat, Y_flat, b_in_flat, b_fut_flat)
+        # Keep (B, H, N) shape — NO per_node reshape here
+        dataset = TensorDataset(X_t, Y_t, b_in_t, b_fut_t)
         return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle,
                           num_workers=0, pin_memory=False)
 
