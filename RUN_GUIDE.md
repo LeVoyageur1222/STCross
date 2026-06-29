@@ -40,6 +40,7 @@ python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA={torch.cuda.i
 | EALGAP | 1e-3 | SA + GRU，中等 |
 | DAN | 1e-3 | CNN+LSTM，标准 |
 | STSSDL | 1e-3 | LSTM + prototype + triplet |
+| STCross | 1e-3 | Our model: DIP + DDAC |
 
 > 不指定 `--lr` 时，批量运行器自动使用上表中的每模型默认值。
 
@@ -296,6 +297,22 @@ python experiments/run_all.py --models STSSDL --settings all
 > Historical Anchoring(减均值) → LSTM encoder → Wq projection → Prototype Assignment(nearest) → concat(z, μ*) → FC → prediction
 > 参数量：~64K | 推荐 LR：1e-3 | 自定义 fit()（L1 + α·triplet contrastive + β·deviation）
 
+### STCross ✅ 已就绪
+
+```bash
+python experiments/run_all.py --models STCross --settings all
+```
+
+> 模型结构（本文方法 DIP + DDAC）：
+> - NBL（正常基线查找, 非学习）→ Δ = X - NBL → Δ_norm = Δ/std(Δ)
+> - AEnc(Δ_norm) → Z_a（异常类型, 容量正则+归一化→弱不变）→ APB匹配 → Δ̂_type
+> - CEnc(Δ) → Z_s（城市表征）→ CAD → Δ̂_adj
+> - MIC: I(Z_s;Z_a)→0（分支冗余去除）
+> - Ŷ = NBL[future] + Δ̂_type + Δ̂_adj
+> 参数量：~123K | 推荐 LR：1e-3 | 自定义 fit()（MIC两阶段优化）
+> Channel-independent → 天然支持跨城市迁移
+> 创新点：DIP（偏差空间容量约束的可迁移原型）+ DDAC（偏差空间解耦与条件化）
+
 ---
 
 ## 完成一个模型后的流程
@@ -324,6 +341,7 @@ python experiments/run_all.py --models STSSDL --settings all
 | Group D | EALGAP | 244K | ~5-10 min | ~10-20 min |
 | Group D | DAN | 134K | ~5-10 min | ~10-20 min |
 | Group D | STSSDL | 64K | ~5-10 min | ~10-20 min |
+| Our | STCross | 123K | ~5-10 min | ~10-20 min |
 
 > 优化后每模型只需 2 次训练（NYC + CHI），而非 4 次。
 > 以上为粗略估算，实际取决于 early stopping 触发时间。

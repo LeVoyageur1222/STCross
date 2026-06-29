@@ -470,12 +470,21 @@
 > **参数量**：~108K（中等，远小于 TimesNet 1.2M）
 > **理论保证**：偏差分布城市无关假设 + 对抗训练 → 可迁移性；后门调整 → 因果无偏；CLUB → 表示独立性
 
-### 5.2 模型实现
+### 5.2 模型实现 ✅
 
-- [ ] 实现核心模块
-- [ ] 适配 `TorchModel` + 注册
-- [x] **用户运行**：4 种实验设置
-- [x] 结果收集 → 已录入 RESULTS.md
+- [x] 实现核心模块 (`model/stcross.py`)
+  - [x] NBL 计算 (compute_nbl + lookup_nbl, 三级回退)
+  - [x] 方差归一化 (std计算 + 小std mask)
+  - [x] AEnc (VariationalLSTM: LSTM+变分编码+L_cap)
+  - [x] CEnc (CityLSTM: LSTM城市表征)
+  - [x] APB (AnomalyProtoBank: 原型嵌入+模式+匹配, 手动距离计算替代cdist)
+  - [x] CAD (CityAdjDecoder: FC+范数惩罚防漂移)
+  - [x] MIC (MICEstimator: 互信息约束, 两阶段优化)
+  - [x] STCrossModel: 自定义fit() + predict_with_baseline()
+  - [x] 注册到 model/registry.py
+- [x] Smoke test 通过 (3轮: 基础前向+反向 / 合成数据训练+预测 / 真实NYC数据+NBL+checkpoint+日志)
+- [ ] **用户运行**：`python experiments/run_all.py --models STCross --settings all --epochs 5000`
+- [ ] 结果收集 → 更新 RESULTS.md
 
 ### 5.3 消融实验
 
@@ -539,7 +548,7 @@ Phase 0 ✅
 - [x] **Phase 2**：~~已废弃~~ — STGCN/DCRNN/GWNET/STGODE 因跨城市 N 不匹配从 registry 移除（2026-06-25 验证）
 - [x] **Phase 3**：TimeAlign ✅ / ProtoTS ✅ / ModernTCN ✅（全量评测完成，结果已录入 RESULTS.md）
 - [x] **Phase 4**：EVL ✅ / EALGAP ✅ / DAN ✅ / ST-SSDL ✅（全量评测完成，结果已录入 RESULTS.md）
-- [ ] **Phase 5**：本文模型设计与实现（待开始，基于 baseline 分析确定创新方向）
+- [x] **Phase 5**：5.1 模型设计 ✅ / 5.2 模型实现 ✅（代码就绪，待用户运行）
 - [ ] **Phase 6**：综合分析与论文撰写（待开始）
 
 > **全量 baseline 实验完成**：12 个模型 × 4 设置 = 48 组实验。详见 `results/RESULTS.md`。

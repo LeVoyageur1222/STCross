@@ -406,3 +406,33 @@ STCross 用 anomaly_mask 计算 NBL，baseline 不用 → 信息不对称。
 | **经验验证** | 可迁移性; 混杂减少 | 跨城迁移实验; P(Δ\|event) 分布距离 |
 
 不过度声称，明确区分确定性/框架/经验三个层级。
+
+---
+
+## 13. 代码实现
+
+> 文件：`model/stcross.py`
+
+### 模块结构（类层次）
+
+| 组件 | 类/函数 | 职责 |
+|------|---------|------|
+| NBL | `compute_nbl()` / `lookup_nbl()` (模块级函数) | 正常基线统计与查表（三级回退） |
+| AEnc | `VariationalLSTM(nn.Module)` | LSTM + 变分编码 (μ, σ, Z_a) |
+| CEnc | `CityLSTM(nn.Module)` | LSTM 城市表征编码 (Z_s) |
+| APB | `AnomalyProtoBank(nn.Module)` | 原型嵌入 + 模式 + 匹配 |
+| CAD | `CityAdjDecoder(nn.Module)` | FC 城市调整解码 (Δ̂_adj) |
+| MIC | `MICEstimator(nn.Module)` | 互信息约束估计器 |
+| 主模型 | `STCrossModel(TorchModel)` | 主模型，含 `_net_forward()`, `fit()`, `predict_with_baseline()` |
+
+### 关键实现细节
+
+- **APB 手动距离计算**：使用 `||z||² + ||e||² - 2*z@e.T` 替代 `torch.cdist`，规避 MPS 后端 backward bug
+- **MIC 两阶段优化**：每 3 步更新一次 q_φ 估计器，每步更新编码器（AEnc/CEnc）
+- **自定义 `fit()`**：为 main params 和 MIC 估计器分别配置 optimizer
+- **`predict_with_baseline()`**：NBL-aware 推理接口，确保 Ŷ = NBL[future] + Δ̂_type + Δ̂_adj
+- **注册**：在 `model/registry.py` 中注册为 `"STCross"`
+
+### 参数量
+
+约 ~123K（AEnc ~58K + CEnc ~50K + CAD ~1K + APB ~0.6K + MIC ~4K + 其余）。

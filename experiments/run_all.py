@@ -50,6 +50,7 @@ MODEL_LR_DEFAULTS = {
     "EALGAP":    1e-3,   # SA + GRU, moderate
     "DAN":       1e-3,   # CNN+LSTM, standard
     "STSSDL":    1e-3,   # LSTM + prototype + triplet, moderate
+    "STCross":   1e-3,   # Our model: DIP + DDAC
 }
 
 

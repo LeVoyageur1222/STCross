@@ -129,3 +129,12 @@ def build_stssdl(config: EvalConfig, train_config: TrainConfig):
         H=config.history_len, P=config.predict_len,
         train_config=train_config,
     )
+
+
+@register("STCross")
+def build_stcross(config: EvalConfig, train_config: TrainConfig):
+    from model.stcross import STCrossModel
+    return STCrossModel(
+        H=config.history_len, P=config.predict_len,
+        train_config=train_config,
+    )
