@@ -525,10 +525,14 @@ Phase 0 ✅
 
 ## 当前进度
 
-- [x] **Phase 0**：全部完成（基础设施 + 代码质量审查 + 修复）
+- [x] **Phase 0**：全部完成（基础设施 + 代码质量审查 + 修复 + 训练循环重构 + 日志系统）
 - [x] **HA**：全量评测完成
-- [x] **Phase 1**：LSTM ✅ / DLinear ✅ / PatchTST ✅ / TimesNet ✅（代码就绪，待用户运行）
+- [x] **Phase 1**：LSTM ✅ / DLinear ✅ / PatchTST ✅ / TimesNet ✅（全量评测完成，结果已录入 RESULTS.md）
 - [x] **Phase 2**：~~已废弃~~ — STGCN/DCRNN/GWNET/STGODE 因跨城市 N 不匹配从 registry 移除（2026-06-25 验证）
-- [x] **Phase 3**：TimeAlign ✅ / ProtoTS ✅ / ModernTCN ✅（代码就绪，待用户运行）
-- [x] **Phase 4**：EVL ✅ / EALGAP ✅ / DAN ✅ / ST-SSDL ✅（代码就绪，待用户运行）
-- [ ] **Phase 5-6**：待开始
+- [x] **Phase 3**：TimeAlign ✅ / ProtoTS ✅ / ModernTCN ✅（全量评测完成，结果已录入 RESULTS.md）
+- [x] **Phase 4**：EVL ✅ / EALGAP ✅ / DAN ✅ / ST-SSDL ✅（全量评测完成，结果已录入 RESULTS.md）
+- [ ] **Phase 5**：本文模型设计与实现（待开始，基于 baseline 分析确定创新方向）
+- [ ] **Phase 6**：综合分析与论文撰写（待开始）
+
+> **全量 baseline 实验完成**：12 个模型 × 4 设置 = 48 组实验。详见 `results/RESULTS.md`。
+> **核心发现**：DAN 综合最优（极性分解+距离加权），ModernTCN 最稳定（纯卷积+低衰减），STSSDL/ProtoTS anomaly MAE 有优势（原型学习）。
