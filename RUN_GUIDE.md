@@ -106,6 +106,14 @@ python experiments/run_all.py --models LSTM --settings all --lr_scheduler platea
 # 自定义训练参数
 python experiments/run_all.py --models LSTM --settings all \
     --epochs 5000 --batch_size 64
+
+# 指定早停 patience（默认30，即30个epoch无改善则停止训练）
+python experiments/run_all.py --models LSTM --settings all \
+    --early_stop_patience 50
+
+# 完整自定义
+python experiments/run_all.py --models LSTM --settings all \
+    --epochs 5000 --batch_size 64 --early_stop_patience 50 --lr 1e-2
 ```
 
 **特性**：
