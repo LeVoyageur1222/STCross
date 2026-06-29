@@ -260,11 +260,13 @@ class STCrossModel(TorchModel):
                  hidden_dim: int = 64, latent_dim: int = 64,
                  k_protos: int = 8, dropout: float = 0.1,
                  alpha: float = 0.01,    # L_cap
-                 beta: float = 0.1,      # L_mic
+                 beta: float = 0.01,     # L_mic (reduced from 0.1 for stability)
                  gamma: float = 0.1,     # L_proto
                  zeta: float = 0.05,     # L_adj
                  margin: float = 0.5,    # triplet margin
                  std_threshold: float = 0.01,
+                 warmup_epochs: int = 3,  # only L_pred for first N epochs
+                 mic_clip: float = 5.0,  # clip MIC loss to [-clip, clip]
                  train_config: TrainConfig = None):
         super().__init__(train_config=train_config)
         self.P = P
@@ -275,6 +277,8 @@ class STCrossModel(TorchModel):
         self.zeta = zeta
         self.margin = margin
         self.std_threshold = std_threshold
+        self.warmup_epochs = warmup_epochs
+        self.mic_clip = mic_clip
 
         # DIP components
         self.aenc = VariationalLSTM(1, hidden_dim, latent_dim, n_layers=2, dropout=dropout)
@@ -337,18 +341,25 @@ class STCrossModel(TorchModel):
         return y_pred.unsqueeze(-1)  # (B, P, 1)
 
     def _compute_loss(self, y_pred: torch.Tensor, Y: torch.Tensor,
-                      delta_true: torch.Tensor) -> Tuple[torch.Tensor, dict]:
-        """Compute combined loss.
+                      delta_true: torch.Tensor,
+                      epoch: int = 0) -> Tuple[torch.Tensor, dict]:
+        """Compute combined loss with warmup and MIC clipping.
 
         Args:
             y_pred: (B, P, 1) prediction.
             Y: (B, P, 1) ground truth.
             delta_true: (B, P) true deviation = Y - B_future.
+            epoch: current epoch (for warmup logic).
         """
         c = self._cache
 
-        # L_pred: prediction MSE
+        # L_pred: always active
         l_pred = F.mse_loss(y_pred, Y)
+
+        # Warmup: first N epochs only L_pred
+        if epoch <= self.warmup_epochs:
+            return l_pred, {'pred': l_pred.item(), 'cap': 0.0, 'mic': 0.0,
+                            'proto': 0.0, 'adj': 0.0}
 
         # L_cap: capacity regularization (KL)
         l_cap = -0.5 * torch.sum(
@@ -361,8 +372,9 @@ class STCrossModel(TorchModel):
         neg_dist = c['dist'].gather(1, idx_sorted[:, 1:2]).squeeze(1)
         l_proto = F.relu(pos_dist - neg_dist + self.margin).mean()
 
-        # L_mic: mutual information constraint
+        # L_mic: mutual information constraint (clipped for stability)
         l_mic = self.mic(c['z_s'], c['z_a'].detach())
+        l_mic = l_mic.clamp(-self.mic_clip, self.mic_clip)
 
         # L_adj: CAD drift prevention
         l_adj = torch.norm(c['delta_adj'], p=2, dim=-1).mean()
@@ -461,7 +473,7 @@ class STCrossModel(TorchModel):
                 delta_true = Y_flat.squeeze(-1) - b_fut_flat.squeeze(-1)
 
                 y_pred = self._net_forward(X_flat, b_in_flat, b_fut_flat)
-                loss, metrics = self._compute_loss(y_pred, Y_flat, delta_true)
+                loss, metrics = self._compute_loss(y_pred, Y_flat, delta_true, epoch=epoch)
 
                 if torch.isnan(loss) or torch.isinf(loss):
                     log_msg(f"WARNING: NaN/Inf loss at epoch {epoch}, "
@@ -473,17 +485,18 @@ class STCrossModel(TorchModel):
                 torch.nn.utils.clip_grad_norm_(main_params, max_norm=cfg.grad_clip_norm)
                 optimizer.step()
 
-                # MIC two-stage: update estimator every 3 steps
-                mic_step += 1
-                if mic_step % 3 == 0:
-                    with torch.no_grad():
-                        self._net_forward(X_flat, b_in_flat, b_fut_flat)
-                    z_s = self._cache['z_s'].detach()
-                    z_a = self._cache['z_a'].detach()
-                    mic_loss = -self.mic(z_s, z_a)  # maximize MI estimate
-                    mic_optimizer.zero_grad()
-                    mic_loss.backward()
-                    mic_optimizer.step()
+                # MIC two-stage: update estimator every 3 steps (skip during warmup)
+                if epoch > self.warmup_epochs:
+                    mic_step += 1
+                    if mic_step % 3 == 0:
+                        with torch.no_grad():
+                            self._net_forward(X_flat, b_in_flat, b_fut_flat)
+                        z_s = self._cache['z_s'].detach()
+                        z_a = self._cache['z_a'].detach()
+                        mic_loss = -self.mic(z_s, z_a)  # maximize MI estimate
+                        mic_optimizer.zero_grad()
+                        mic_loss.backward()
+                        mic_optimizer.step()
 
                 train_total += loss.item()
                 n_train += 1
