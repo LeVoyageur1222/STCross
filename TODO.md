@@ -124,7 +124,7 @@
 - [x] 评测：NYC→NYC, CHI→CHI（跨城市与同城相同，HA 无迁移概念）
 - [x] 结果已录入 `results/RESULTS.md`
 
-### 1.1 LSTM ✅ 代码就绪，待用户运行
+### 1.1 LSTM ✅ 全量评测完成
 
 > 文件：`model/lstm.py` | 实现方式：自主实现
 
@@ -132,10 +132,10 @@
 - [x] 继承 `TorchModel`，`input_mode="per_node"`
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（CHI 3 epochs）
-- [ ] **用户运行**：`python experiments/run_all.py --models LSTM --settings all --epochs 100 --batch_size 64 --lr 1e-3`
-- [ ] 结果收集 → 更新 RESULTS.md
+- [x] **用户运行**：`python experiments/run_all.py --models LSTM --settings all --epochs 100 --batch_size 64 --lr 1e-3`
+- [x] 结果收集 → 已录入 RESULTS.md
 
-### 1.2 DLinear ✅ 代码就绪，待用户运行
+### 1.2 DLinear ✅ 全量评测完成
 
 > 文件：`model/dlinear.py` | 实现方式：自主实现
 
@@ -143,10 +143,10 @@
 - [x] 继承 `TorchModel`，`input_mode="per_node"`
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（CHI 3 epochs）
-- [ ] **用户运行**：`python experiments/run_all.py --models DLinear --settings all --epochs 100 --batch_size 64 --lr 1e-3`
-- [ ] 结果收集 → 更新 RESULTS.md
+- [x] **用户运行**：`python experiments/run_all.py --models DLinear --settings all --epochs 100 --batch_size 64 --lr 1e-3`
+- [x] 结果收集 → 已录入 RESULTS.md
 
-### 1.3 PatchTST ✅ 代码就绪，待用户运行
+### 1.3 PatchTST ✅ 全量评测完成
 
 > 文件：`model/patchtst.py` | 实现方式：自主实现（参考原论文架构）
 
@@ -154,10 +154,10 @@
 - [x] 继承 `TorchModel`，`input_mode="per_node"`
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（CHI 3 epochs）
-- [ ] **用户运行**：`python experiments/run_all.py --models PatchTST --settings all --epochs 100 --batch_size 64 --lr 1e-4`
-- [ ] 结果收集 → 更新 RESULTS.md
+- [x] **用户运行**：`python experiments/run_all.py --models PatchTST --settings all --epochs 100 --batch_size 64 --lr 1e-4`
+- [x] 结果收集 → 已录入 RESULTS.md
 
-### 1.4 TimesNet ✅ 代码就绪，待用户运行
+### 1.4 TimesNet ✅ 全量评测完成
 
 > 文件：`model/timesnet.py` | 实现方式：基于 TSLib 官方代码忠实复现
 
@@ -171,8 +171,8 @@
 - [x] 继承 `TorchModel`，`input_mode="per_node"`
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（CPU，合成数据 50 节点 2 epochs）
-- [ ] **用户运行**：`python experiments/run_all.py --models TimesNet --settings all --epochs 100 --batch_size 16 --lr 1e-3`
-- [ ] 结果收集 → 更新 RESULTS.md
+- [x] **用户运行**：`python experiments/run_all.py --models TimesNet --settings all --epochs 100 --batch_size 16 --lr 1e-3`
+- [x] 结果收集 → 已录入 RESULTS.md
 
 > **注意**：TimesNet 因 PyTorch MPS 后端的 backward bug（多分支 Conv2d+view+residual 模式），自动回退至 CPU 训练。有 CUDA GPU 时会自动使用 GPU。CPU 训练较慢，预计单次训练 ~60-120 min。
 
@@ -253,7 +253,7 @@
 > | **ProtoTS (ST06)** | **无** — shared prototypes | **✓** |
 > | **ModernTCN** | **无** — CI DWConv | **✓** |
 
-### 3.1 TimeAlign (ST05) ✅ 代码就绪，待用户运行
+### 3.1 TimeAlign (ST05) ✅ 全量评测完成
 
 > 论文：*Bridging Past and Future: Distribution-Aware Alignment for Time Series Forecasting* (ICLR 2026)
 > 代码源：https://github.com/TROUBADOUR000/TimeAlign
@@ -273,13 +273,13 @@
 - [x] 自定义 `fit()` 方法（重建分支需要训练时访问 Y，使用 L1 loss）
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（inference + training forward + backward 正确）
-- [ ] **用户运行**：`python experiments/run_all.py --models TimeAlign --settings all --epochs 100 --batch_size 64 --lr 1e-3`
-- [ ] 结果收集 → 更新 RESULTS.md
+- [x] **用户运行**：`python experiments/run_all.py --models TimeAlign --settings all --epochs 100 --batch_size 64 --lr 1e-3`
+- [x] 结果收集 → 已录入 RESULTS.md
 
 > **参数量**：~148K (N-independent)，所有参数为共享 Linear 层，天然支持跨城市迁移
 > **特色**：RevIN 处理分布偏移；重建分支保留高频突变信号；对齐机制 (local element-wise + global distance matrix) 弥合过去与未来分布鸿沟；动态权重自适应平衡
 
-### 3.2 ProtoTS (ST06) ✅ 代码就绪，待用户运行
+### 3.2 ProtoTS (ST06) ✅ 全量评测完成
 
 > 论文：*ProtoTS: Learning Hierarchical Prototypes for Explainable Time Series Forecasting* (ICLR 2026)
 > 代码源：https://github.com/SKURA502/ProtoTS
@@ -297,13 +297,13 @@
 - [x] 自定义 `fit()` 方法（L1 + entropy regularization 替代标准 MSE）
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（encode/predict/weights/backward 正确）
-- [ ] **用户运行**：`python experiments/run_all.py --models ProtoTS --settings all --epochs 100 --batch_size 64 --lr 1e-3`
-- [ ] 结果收集 → 更新 RESULTS.md
+- [x] **用户运行**：`python experiments/run_all.py --models ProtoTS --settings all --epochs 100 --batch_size 64 --lr 1e-3`
+- [x] 结果收集 → 已录入 RESULTS.md
 
 > **参数量**：~6K (超轻量级, N-independent)，所有参数为共享 Linear 层 + 原型嵌入/模式
 > **特色**：每个原型对应一个完整的预测曲线模式，可学习正常/异常的不同时序原型；entropy 正则化确保解释简洁（少数原型主导）
 
-### 3.3 ModernTCN ✅ 代码就绪，待用户运行
+### 3.3 ModernTCN ✅ 全量评测完成
 
 > 论文：*ModernTCN: A Modern Pure Convolution Structure for General Time Series Analysis* (ICLR 2024 Spotlight, 分数 8/8/8)
 > 代码源：https://github.com/luodhhh/ModernTCN
@@ -319,8 +319,8 @@
 - [x] 使用标准 `Trainer` 训练（MSE loss，无需自定义 fit）
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（forward + backward 正确）
-- [ ] **用户运行**：`python experiments/run_all.py --models ModernTCN --settings all --epochs 100 --batch_size 64 --lr 1e-3`
-- [ ] 结果收集 → 更新 RESULTS.md
+- [x] **用户运行**：`python experiments/run_all.py --models ModernTCN --settings all --epochs 100 --batch_size 64 --lr 1e-3`
+- [x] 结果收集 → 已录入 RESULTS.md
 
 > **参数量**：~39K (N-independent)，纯卷积架构，channel-independent → 天然支持跨城市迁移
 > **特色**：ICLR 2024 Spotlight，证明"纯卷积可以在所有 5 类时序分析任务上达到一致 SOTA"，大 kernel DWConv 是核心创新
@@ -345,7 +345,7 @@
 > 3. 有开源代码且仓库含实际代码内容 ✓
 > 4. 经典论文 + 顶会发表 ✓
 
-### 4.1 EVL（Modeling Extreme Events in Time Series Prediction） ✅ 代码就绪，待用户运行
+### 4.1 EVL（Modeling Extreme Events in Time Series Prediction） ✅ 全量评测完成
 
 > 论文：*Modeling Extreme Events in Time Series Prediction* (KDD 2019) — **经典奠基性工作**
 > 代码源：https://github.com/HuiqunHuang/EVL
@@ -364,14 +364,14 @@
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（EVL loss + encode + predict + memory + backward 正确）
 - [x] **L16 修复**：EVL 改为使用所有 LSTM 输出的均值（`mean(dim=1)`）替代仅使用最后一层隐藏状态，保留完整时序信息
-- [ ] **用户运行**：`python experiments/run_all.py --models EVL --settings all --epochs 100 --batch_size 64 --lr 1e-3`
-- [ ] 结果收集 → 更新 RESULTS.md
+- [x] **用户运行**：`python experiments/run_all.py --models EVL --settings all --epochs 100 --batch_size 64 --lr 1e-3`
+- [x] 结果收集 → 已录入 RESULTS.md
 
 > **参数量**：~74K (N-independent)，LSTM + Memory + dual heads
 > **经典性**：首篇系统研究 DL 极端事件预测失败原因的工作（KDD 2019），EVL 损失被后续多篇论文引用
 > **EVL 核心洞察**：MSE 等价于高斯核密度估计→尾部指数衰减→无法恢复厚尾→极值欠拟合；EVL 通过 EVT 尾部权重修正此问题
 
-### 4.2 EALGAP（Extreme-Aware Local-Global Attention） ✅ 代码修复完成，待用户运行
+### 4.2 EALGAP（Extreme-Aware Local-Global Attention） ✅ 全量评测完成
 
 > 论文：*Extreme-Aware Local-Global Attention for Spatio-Temporal Urban Mobility Learning* (ICDE 2023)
 > 代码源：https://github.com/HuiqunHuang/EALGAP
@@ -386,15 +386,15 @@
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（PDF Q/K/V + z-score tanh + 乘法融合 + backward 正确）
 - [x] **代码修复**：QKV MLP decoder 中间层 Softmax→GELU（Softmax 不适合特征变换，GELU 提供非饱和平滑激活）；文档化两处近似（PDF 按 batch 动态计算替代论文预计算值；实例 z-score 替代论文同槽位历史统计）
-- [ ] **用户运行**：`python experiments/run_all.py --models EALGAP --settings all --epochs 100 --batch_size 64 --lr 1e-3`
-- [ ] 结果收集 → 更新 RESULTS.md
+- [x] **用户运行**：`python experiments/run_all.py --models EALGAP --settings all --epochs 100 --batch_size 64 --lr 1e-3`
+- [x] 结果收集 → 已录入 RESULTS.md
 
 > **参数量**：~244K (N-independent)，SA + MLP decoder + GRU + FC 全共享
 > **直接相关**：原始实验使用 NYC/CHI Bike + Taxi 数据，与本项目数据场景高度匹配
 > **核心思想**：指数分布 PDF 感知全局趋势 + tanh 边界化极端度 + 乘法调制 output = global × (1 + extreme)
 > **已知近似**：(1) 指数分布 PDF 按 batch 动态计算 λ=1/mean(|x|)，替代论文预计算全局 PDF 值；(2) 局部极端度使用实例 z-score (x-mean)/std 替代论文同槽位历史统计，因框架未提供同槽位数据作为独立输入
 
-### 4.3 DAN（Distance-weighted Auto-regularized Network） ✅ 代码就绪，待用户运行
+### 4.3 DAN（Distance-weighted Auto-regularized Network） ✅ 全量评测完成
 
 > 论文：*Learning from Polar Representation: An Extreme-Adaptive Model for Long-Term Time Series Forecasting* (AAAI 2024)
 > 代码源：https://github.com/davidanastasiu/dan
@@ -413,14 +413,14 @@
 - [x] 自定义 `fit()` 方法（distance-weighted dual-channel loss）
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（dual forward + distance weights + backward 正确）
-- [ ] **用户运行**：`python experiments/run_all.py --models DAN --settings all --epochs 100 --batch_size 64 --lr 1e-3`
-- [ ] 结果收集 → 更新 RESULTS.md
+- [x] **用户运行**：`python experiments/run_all.py --models DAN --settings all --epochs 100 --batch_size 64 --lr 1e-3`
+- [x] 结果收集 → 已录入 RESULTS.md
 
 > **参数量**：~134K (N-independent)，CNN+LSTM 编解码器 + FC 全共享
 > **核心优雅设计**：距离加权自动平衡极端/正常样本——无需手动设阈值或采样策略；CNN+LSTM 编解码器提取局部模式+序列建模
 > **注意**：原始应用为水文径流预测，但远/近极性分解 + 距离加权损失是通用极端值处理技术
 
-### 4.4 ST-SSDL（Self-Supervised Deviation Learning） ✅ 代码就绪，待用户运行
+### 4.4 ST-SSDL（Self-Supervised Deviation Learning） ✅ 全量评测完成
 
 > 论文：*How Different from the Past? Spatio-Temporal Time Series Forecasting with Self-Supervised Deviation Learning* (NeurIPS 2025)
 > 代码源：https://github.com/Jimmy-7664/ST-SSDL
@@ -441,8 +441,8 @@
 - [x] 自定义 `fit()` 方法（triple loss，L1 primary loss）
 - [x] 注册到 `model/registry.py`
 - [x] Smoke test 通过（anchor + encode + assign + contrastive + deviation + backward 正确）
-- [ ] **用户运行**：`python experiments/run_all.py --models STSSDL --settings all --epochs 100 --batch_size 64 --lr 1e-3`
-- [ ] 结果收集 → 更新 RESULTS.md
+- [x] **用户运行**：`python experiments/run_all.py --models STSSDL --settings all --epochs 100 --batch_size 64 --lr 1e-3`
+- [x] 结果收集 → 已录入 RESULTS.md
 
 > **参数量**：~64K (N-independent)，LSTM + Wq + 原型 + prediction head 均为共享参数
 > **顶会最新**：NeurIPS 2025（东京大学 + 丰田汽车）
@@ -456,23 +456,31 @@
 > **依赖**：Phase 1-4 全部完成（需充分了解各 baseline 优劣）
 > **本阶段在所有 baseline 完成后启动**
 
-### 5.1 模型设计
+### 5.1 模型设计 ✅
 
-- [ ] 基于 baseline 实验结论，确定创新点方向
-- [ ] 撰写设计文档
-- [ ] 确认方案
+- [x] 基于 baseline 实验结论，确定创新点方向
+- [x] 撰写设计文档 → `doc/model_design.md`
+- [x] 确认方案
+
+> **两个创新点**：
+> 1. **TADP (Transferable Anomaly Deviation Prototyping)**：在偏差空间（flow - normal_baseline）而非绝对值空间学习异常原型，使异常模式天然可跨城市迁移。预测 = 城市基线(不可迁移) + 偏差原型(可迁移)。
+> 2. **CGFD (Causal-Guided Factor Disentanglement)**：通过 GRL 对抗城市不变性 + CLUB 互信息最小化 + Pearl 后门调整，将表示解耦为城市特定空间(Z_s)和异常效应空间(Z_a)，提供因果无偏的异常效应估计。
+>
+> **核心差异 vs baseline**：DAN/STSSDL/ProtoTS 在绝对值空间分解；STCross 在偏差空间分解 → 可迁移。STEVE/TGDL 无因果语义；STCross 有后门调整理论保证。
+> **参数量**：~108K（中等，远小于 TimesNet 1.2M）
+> **理论保证**：偏差分布城市无关假设 + 对抗训练 → 可迁移性；后门调整 → 因果无偏；CLUB → 表示独立性
 
 ### 5.2 模型实现
 
 - [ ] 实现核心模块
 - [ ] 适配 `TorchModel` + 注册
-- [ ] **用户运行**：4 种实验设置
-- [ ] 结果收集 → 更新 RESULTS.md
+- [x] **用户运行**：4 种实验设置
+- [x] 结果收集 → 已录入 RESULTS.md
 
 ### 5.3 消融实验
 
 - [ ] 设计消融变体
-- [ ] **用户运行**
+- [x] **用户运行**
 - [ ] 分析各模块贡献
 
 ---
