@@ -599,30 +599,36 @@ class STCrossModel(TorchModel):
         b_fut_t = torch.from_numpy(b_future).float()
 
         B, H, N = X_t.shape
-        # Per_node reshape
-        X_flat = X_t.permute(0, 2, 1).reshape(B * N, H, 1)
-        b_in_flat = b_in_t.permute(0, 2, 1).reshape(B * N, H, 1)
-        b_fut_flat = b_fut_t.permute(0, 2, 1).reshape(B * N, self.P, 1)
+        # Batch over samples (B), NOT over B*N — reshape inside loop
+        # This gives B/batch_size batches (e.g., 5761/64=90), not B*N/bs (e.g., 121K)
+        sample_bs = self.train_config.batch_size
+        n_sample_batches = (B + sample_bs - 1) // sample_bs
 
-        # Cap effective batch
-        max_eff = 32768
-        bs = min(self.train_config.batch_size * 2, max(1, max_eff // max(N, 1)))
+        preds_all = np.zeros((B, self.P, N), dtype=np.float32)
 
-        results = []
         with torch.no_grad():
-            for i in tqdm(range(0, len(X_flat), bs),
-                          total=(len(X_flat) + bs - 1) // bs,
+            for i in tqdm(range(0, B, sample_bs),
+                          total=n_sample_batches,
                           desc="Predict", unit="batch", leave=False):
-                batch_x = X_flat[i:i+bs].to(self._device)
-                batch_in = b_in_flat[i:i+bs].to(self._device)
-                batch_fut = b_fut_flat[i:i+bs].to(self._device)
-                out = self._net_forward(batch_x, batch_in, batch_fut)
-                results.append(out.cpu().numpy())
+                end = min(i + sample_bs, B)
+                X_batch = X_t[i:end].to(self._device)          # (bs, H, N)
+                bin_batch = b_in_t[i:end].to(self._device)      # (bs, H, N)
+                bfut_batch = b_fut_t[i:end].to(self._device)    # (bs, P, N)
 
-        preds_flat = np.concatenate(results, axis=0)  # (B*N, P, 1)
-        # Reshape back: (B, N, P) → (B, P, N)
-        preds = preds_flat.reshape(B, N, self.P).transpose(0, 2, 1)
-        return preds
+                # Per_node reshape inside batch
+                bs, _, _ = X_batch.shape
+                X_flat = X_batch.permute(0, 2, 1).reshape(bs * N, H, 1)
+                bin_flat = bin_batch.permute(0, 2, 1).reshape(bs * N, H, 1)
+                bfut_flat = bfut_batch.permute(0, 2, 1).reshape(bs * N, self.P, 1)
+
+                out = self._net_forward(X_flat, bin_flat, bfut_flat)  # (bs*N, P, 1)
+                out = out.cpu().numpy()
+
+                # Reshape back: (bs*N, P, 1) → (bs, N, P) → (bs, P, N)
+                preds_batch = out.reshape(bs, N, self.P).transpose(0, 2, 1)
+                preds_all[i:end] = preds_batch
+
+        return preds_all
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Fallback predict without NBL (for compatibility)."""
