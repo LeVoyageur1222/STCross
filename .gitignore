@@ -13,6 +13,7 @@ data/processed_data/weather/*.npy
 
 # 模型 checkpoint（训练产出，大文件）
 checkpoints/
+checkpoints_save/
 *.pt
 *.pth
 *.ckpt
