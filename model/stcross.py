@@ -541,8 +541,8 @@ class STCrossModel(TorchModel):
             b_in_t = torch.from_numpy(b_input).float()
             b_fut_t = torch.from_numpy(b_future).float()
         else:
-            b_in_t = torch.zeros_like(X_t)
-            b_fut_t = torch.zeros(X_t.size(0), self.P, 1)
+            b_in_t = torch.zeros_like(X_t)  # (B, H, N)
+            b_fut_t = torch.zeros(X_t.size(0), self.P, X_t.size(2))  # (B, P, N)
 
         # Per_node reshape: (B, H, N) → (B*N, H, 1)
         B, H, N = X_t.shape
