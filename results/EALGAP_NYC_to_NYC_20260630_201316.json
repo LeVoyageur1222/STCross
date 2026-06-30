@@ -1,0 +1,38 @@
+{
+  "model": "EALGAP",
+  "source_city": "NYC",
+  "target_city": "NYC",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 2.0602,
+      "RMSE": 4.159,
+      "MAPE": 81.81,
+      "PCC": 0.6194,
+      "R2": 0.3809
+    },
+    "anomaly": {
+      "count": 507,
+      "MAE": 1.837,
+      "RMSE": 3.4742,
+      "MAPE": 92.42,
+      "PCC": 0.5591,
+      "R2": 0.2916
+    },
+    "normal": {
+      "count": 5254,
+      "MAE": 2.0818,
+      "RMSE": 4.2192,
+      "MAPE": 80.89,
+      "PCC": 0.6238,
+      "R2": 0.3851
+    }
+  }
+}

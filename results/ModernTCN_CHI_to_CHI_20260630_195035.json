@@ -1,0 +1,38 @@
+{
+  "model": "ModernTCN",
+  "source_city": "CHI",
+  "target_city": "CHI",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 0.8452,
+      "RMSE": 2.2934,
+      "MAPE": 65.61,
+      "PCC": 0.64,
+      "R2": 0.3812
+    },
+    "anomaly": {
+      "count": 398,
+      "MAE": 0.7231,
+      "RMSE": 1.8878,
+      "MAPE": 66.36,
+      "PCC": 0.6253,
+      "R2": 0.3835
+    },
+    "normal": {
+      "count": 5363,
+      "MAE": 0.8543,
+      "RMSE": 2.3207,
+      "MAPE": 65.56,
+      "PCC": 0.6411,
+      "R2": 0.3807
+    }
+  }
+}

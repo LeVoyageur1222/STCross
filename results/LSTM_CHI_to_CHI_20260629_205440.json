@@ -1,0 +1,38 @@
+{
+  "model": "LSTM",
+  "source_city": "CHI",
+  "target_city": "CHI",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 0.8552,
+      "RMSE": 2.3247,
+      "MAPE": 65.63,
+      "PCC": 0.6269,
+      "R2": 0.3642
+    },
+    "anomaly": {
+      "count": 398,
+      "MAE": 0.7421,
+      "RMSE": 1.936,
+      "MAPE": 67.21,
+      "PCC": 0.5975,
+      "R2": 0.3516
+    },
+    "normal": {
+      "count": 5363,
+      "MAE": 0.8636,
+      "RMSE": 2.3509,
+      "MAPE": 65.54,
+      "PCC": 0.6289,
+      "R2": 0.3645
+    }
+  }
+}

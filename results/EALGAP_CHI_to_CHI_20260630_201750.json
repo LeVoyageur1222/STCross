@@ -1,0 +1,38 @@
+{
+  "model": "EALGAP",
+  "source_city": "CHI",
+  "target_city": "CHI",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 0.9117,
+      "RMSE": 2.3369,
+      "MAPE": 65.18,
+      "PCC": 0.6081,
+      "R2": 0.3575
+    },
+    "anomaly": {
+      "count": 398,
+      "MAE": 0.8045,
+      "RMSE": 1.9507,
+      "MAPE": 66.1,
+      "PCC": 0.5888,
+      "R2": 0.3418
+    },
+    "normal": {
+      "count": 5363,
+      "MAE": 0.9197,
+      "RMSE": 2.363,
+      "MAPE": 65.13,
+      "PCC": 0.6095,
+      "R2": 0.3579
+    }
+  }
+}

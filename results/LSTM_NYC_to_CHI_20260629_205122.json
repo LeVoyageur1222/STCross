@@ -1,0 +1,38 @@
+{
+  "model": "LSTM",
+  "source_city": "NYC",
+  "target_city": "CHI",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 0.8832,
+      "RMSE": 2.3166,
+      "MAPE": 67.21,
+      "PCC": 0.6156,
+      "R2": 0.3686
+    },
+    "anomaly": {
+      "count": 398,
+      "MAE": 0.7726,
+      "RMSE": 1.9324,
+      "MAPE": 68.63,
+      "PCC": 0.5969,
+      "R2": 0.3541
+    },
+    "normal": {
+      "count": 5363,
+      "MAE": 0.8914,
+      "RMSE": 2.3426,
+      "MAPE": 67.12,
+      "PCC": 0.617,
+      "R2": 0.369
+    }
+  }
+}

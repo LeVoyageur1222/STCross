@@ -1,0 +1,38 @@
+{
+  "model": "TimesNet",
+  "source_city": "NYC",
+  "target_city": "NYC",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 1.9103,
+      "RMSE": 4.242,
+      "MAPE": 79.89,
+      "PCC": 0.6031,
+      "R2": 0.3559
+    },
+    "anomaly": {
+      "count": 507,
+      "MAE": 1.6215,
+      "RMSE": 3.4892,
+      "MAPE": 82.26,
+      "PCC": 0.5492,
+      "R2": 0.2855
+    },
+    "normal": {
+      "count": 5254,
+      "MAE": 1.9382,
+      "RMSE": 4.3077,
+      "MAPE": 79.68,
+      "PCC": 0.6058,
+      "R2": 0.359
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "model": "TimesNet",
+  "source_city": "CHI",
+  "target_city": "CHI",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 0.8513,
+      "RMSE": 2.4641,
+      "MAPE": 72.61,
+      "PCC": 0.5491,
+      "R2": 0.2857
+    },
+    "anomaly": {
+      "count": 398,
+      "MAE": 0.6823,
+      "RMSE": 1.9981,
+      "MAPE": 74.1,
+      "PCC": 0.5593,
+      "R2": 0.3094
+    },
+    "normal": {
+      "count": 5363,
+      "MAE": 0.8639,
+      "RMSE": 2.4952,
+      "MAPE": 72.53,
+      "PCC": 0.5487,
+      "R2": 0.2841
+    }
+  }
+}

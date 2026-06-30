@@ -1,0 +1,38 @@
+{
+  "model": "EVL",
+  "source_city": "CHI",
+  "target_city": "CHI",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 0.8444,
+      "RMSE": 2.336,
+      "MAPE": 65.78,
+      "PCC": 0.6245,
+      "R2": 0.358
+    },
+    "anomaly": {
+      "count": 398,
+      "MAE": 0.7194,
+      "RMSE": 1.9199,
+      "MAPE": 66.58,
+      "PCC": 0.6086,
+      "R2": 0.3624
+    },
+    "normal": {
+      "count": 5363,
+      "MAE": 0.8537,
+      "RMSE": 2.3639,
+      "MAPE": 65.74,
+      "PCC": 0.6256,
+      "R2": 0.3574
+    }
+  }
+}

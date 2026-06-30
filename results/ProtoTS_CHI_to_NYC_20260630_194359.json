@@ -1,0 +1,38 @@
+{
+  "model": "ProtoTS",
+  "source_city": "CHI",
+  "target_city": "NYC",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 2.3919,
+      "RMSE": 5.5185,
+      "MAPE": 91.16,
+      "PCC": 0.3236,
+      "R2": -0.0901
+    },
+    "anomaly": {
+      "count": 507,
+      "MAE": 1.8235,
+      "RMSE": 4.2466,
+      "MAPE": 89.07,
+      "PCC": 0.3188,
+      "R2": -0.0585
+    },
+    "normal": {
+      "count": 5254,
+      "MAE": 2.4467,
+      "RMSE": 5.6261,
+      "MAPE": 91.34,
+      "PCC": 0.3246,
+      "R2": -0.0933
+    }
+  }
+}
