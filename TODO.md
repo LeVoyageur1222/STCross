@@ -470,7 +470,7 @@
 > **参数量**：~108K（中等，远小于 TimesNet 1.2M）
 > **理论保证**：偏差分布城市无关假设 + 对抗训练 → 可迁移性；后门调整 → 因果无偏；CLUB → 表示独立性
 
-### 5.2 模型实现 ✅
+### 5.2 模型实现 ✅ 全量实验完成
 
 - [x] 实现核心模块 (`model/stcross.py`)
   - [x] NBL 计算 (compute_nbl + lookup_nbl, 三级回退)
@@ -483,14 +483,52 @@
   - [x] STCrossModel: 自定义fit() + predict_with_baseline()
   - [x] 注册到 model/registry.py
 - [x] Smoke test 通过 (3轮: 基础前向+反向 / 合成数据训练+预测 / 真实NYC数据+NBL+checkpoint+日志)
-- [ ] **用户运行**：`python experiments/run_all.py --models STCross --settings all --epochs 5000`
-- [ ] 结果收集 → 更新 RESULTS.md
+- [x] **用户运行**：全量实验完成（patience=10, CosineAnnealingLR）
+- [x] 结果收集 → 已录入 RESULTS.md（STCross 全面优于 11 个 baseline）
 
 ### 5.3 消融实验
 
-- [ ] 设计消融变体
-- [x] **用户运行**
-- [ ] 分析各模块贡献
+> 方案详见 `doc/ablation_plan.md`（v3，基于3位教授审阅+用户反馈）
+> 设置：NYC→NYC + NYC→CHI（同城+跨城）
+> 3 个变体，每个只改一个维度，对应一个子贡献，附证伪条件
+
+- [ ] **A1: 绝对值空间+原型（w/o 偏差空间）** — AEnc 直接吃 X，保留 APB → 验证偏差空间的必要性（DIP-①）
+- [ ] **A2: 偏差空间+无原型（w/o 原型匹配）** — 保留偏差空间，APB 替换为 FC → 验证原型匹配的必要性（DIP-②）
+- [ ] **A3: w/o DDAC（去掉双分支解耦）** — 去掉 CEnc+CAD+MIC，仅 Z_a+APB → 验证城市调整的边际贡献（DDAC-③）
+- [ ] **用户运行**（3 变体 × 2 设置 = 6 次实验）
+
+### 5.4 NBL 消融与假设验证
+
+- [ ] **F1: NBL 基线消融** — normal-only vs full HA → 基线纯度价值
+- [ ] **H1: 假设检验** — P(Δ|event) NYC vs CHI Wasserstein 距离 → 可迁移性假设（非训练）
+
+### 5.5 参数敏感性实验（先导）
+
+> 设置：NYC→CHI（跨城），3 个参数，全部与 DIP 创新点直接相关
+> 先于消融实验执行，确定最优参数组合后在其上跑消融
+
+- [ ] **S1: K（原型数）** ∈ {1, 2, 4, 8, 16} → DIP 原型覆盖能力（K=1 退化基线）
+- [ ] **S2: α（L_cap 权重）** ∈ {0, 0.001, 0.01, 0.05, 0.1} → DIP+DDAC 容量约束（α=0 边界）
+- [ ] **S3: γ（L_proto 权重）** ∈ {0.01, 0.1, 0.5, 1.0} → DIP 原型判别性
+- [ ] **用户运行**（~13 次实验）
+- [ ] 绘制参数-MAE/PCC 曲线，确定最优组合
+
+### 5.6 可视化
+
+> 5 项，含定量指标
+
+- [ ] **V1: 偏差原型 pattern** — K=8 原型的 Δ̂_type 曲线（DIP 可解释性）
+- [ ] **V2: Z_a/Z_s 城市不变性** — t-SNE + domain classifier accuracy（Z_a≈50% / Z_s>70%）
+- [ ] **V3: 预测曲线 Case Study** — STCross vs DAN vs HA，标注 NBL/Δ̂_type/Δ̂_adj 分解
+- [ ] **V4: 参数敏感性曲线** — S1-S3 参数-MAE/PCC 曲线
+- [ ] **V5: 反事实测试** — 交换 Z_s，验证类型不变幅度变（DDAC 最强证据）
+
+### 5.7 工程预备
+
+- [ ] `VariationalLSTM.forward` 加 `logvar.clamp(-10, 10)` 防 NaN
+- [ ] 新增 `model.encode()` 接口（提取 Z_a/Z_s，供 V2/V5）
+- [ ] 新增 `model.predict_with_decomposition()` 接口（返回分解预测，供 V3）
+- [ ] patience 分变体配置（A1=15, 其余=10）
 
 ---
 
@@ -498,23 +536,21 @@
 
 > **依赖**：Phase 1-5
 
-### 6.1 敏感性分析
+### 6.1 综合分析
 
-- [ ] 窗口大小：H/P ∈ {6, 12, 24}
-- [ ] 异常阈值：anomaly_min_ratio ∈ {0.0, 0.25, 0.5, 0.75}
-- [ ] 邻接矩阵 Top-K ∈ {5, 10, 20}
+- [ ] 汇总消融实验结果（5.3）和参数敏感性结果（5.4）
+- [ ] 分析各组件贡献的量化结论
+- [ ] 假设 H1 验证结论（P(Δ|event) 跨城分布距离）
+- [ ] 公平性对照实验结论
 
-### 6.2 可视化
-
-- [ ] 预测曲线对比图
-- [ ] 跨城市迁移衰减柱状图
-- [ ] 各方法 full/anomaly/normal 雷达图
-
-### 6.3 论文撰写
+### 6.2 论文撰写
 
 - [ ] 实验设置、主实验表格、分析
-- [ ] 消融实验
-- [ ] Case Study
+- [ ] 消融实验表格 + 分析
+- [ ] 参数敏感性图表 + 分析
+- [ ] 可视化（原型 pattern / t-SNE / 预测曲线）
+- [ ] Case Study（典型异常时段预测对比）
+- [ ] 公平性讨论（anomaly_mask 信息不对称）
 
 ---
 
@@ -548,8 +584,12 @@ Phase 0 ✅
 - [x] **Phase 2**：~~已废弃~~ — STGCN/DCRNN/GWNET/STGODE 因跨城市 N 不匹配从 registry 移除（2026-06-25 验证）
 - [x] **Phase 3**：TimeAlign ✅ / ProtoTS ✅ / ModernTCN ✅（全量评测完成，结果已录入 RESULTS.md）
 - [x] **Phase 4**：EVL ✅ / EALGAP ✅ / DAN ✅ / ST-SSDL ✅（全量评测完成，结果已录入 RESULTS.md）
-- [x] **Phase 5**：5.1 模型设计 ✅ / 5.2 模型实现 ✅（代码就绪，待用户运行）
+- [x] **Phase 5**：5.1 模型设计 ✅ / 5.2 模型实现+全量实验 ✅ / 5.3-5.5 消融+敏感性+可视化（方案已设计，4+4+4=12项，待运行）
 - [ ] **Phase 6**：综合分析与论文撰写（待开始）
+
+> **全量实验完成**：12 个模型 × 4 设置 = 48 组实验。详见 `results/RESULTS.md`。
+> **核心发现**：STCross 在所有设置全面领先，MAE 降低 9-11%，R² 提升 31-53%，迁移衰减最低（3.3%）。
+> **STCross 创新点**：DIP（偏差空间容量约束的可迁移原型）+ DDAC（偏差空间解耦与条件化）。
 
 > **全量 baseline 实验完成**：12 个模型 × 4 设置 = 48 组实验。详见 `results/RESULTS.md`。
 > **核心发现**：DAN 综合最优（极性分解+距离加权），ModernTCN 最稳定（纯卷积+低衰减），STSSDL/ProtoTS anomaly MAE 有优势（原型学习）。
