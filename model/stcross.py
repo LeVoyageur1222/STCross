@@ -129,6 +129,7 @@ class VariationalLSTM(nn.Module):
         h = out[:, -1, :]              # (B, hidden)
         mu = self.fc_mu(h)             # (B, latent)
         logvar = self.fc_logvar(h)     # (B, latent)
+        logvar = logvar.clamp(-8, 4)   # prevent NaN at high alpha
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         z = mu + eps * std             # reparameterization
@@ -267,6 +268,8 @@ class STCrossModel(TorchModel):
                  std_threshold: float = 0.01,
                  warmup_epochs: int = 3,  # only L_pred for first N epochs
                  mic_clip: float = 5.0,  # clip MIC loss to [-clip, clip]
+                 use_proto: bool = True,       # A2: False → FC替代APB
+                 use_city_branch: bool = True,  # A3: False → 去掉CEnc+CAD+MIC
                  train_config: TrainConfig = None):
         super().__init__(train_config=train_config)
         self.P = P
@@ -279,12 +282,17 @@ class STCrossModel(TorchModel):
         self.std_threshold = std_threshold
         self.warmup_epochs = warmup_epochs
         self.mic_clip = mic_clip
+        self.use_proto = use_proto
+        self.use_city_branch = use_city_branch
 
         # DIP components
         self.aenc = VariationalLSTM(1, hidden_dim, latent_dim, n_layers=2, dropout=dropout)
-        self.apb = AnomalyProtoBank(k_protos, latent_dim, P)
+        if use_proto:
+            self.apb = AnomalyProtoBank(k_protos, latent_dim, P)
+        else:
+            self.fc_direct = nn.Linear(latent_dim, P)  # A2: FC替代APB
 
-        # DDAC components
+        # DDAC components (always instantiated, bypassed if use_city_branch=False)
         self.cenc = CityLSTM(1, hidden_dim, latent_dim, n_layers=2, dropout=dropout)
         self.cad = CityAdjDecoder(latent_dim, P, hidden_dim)
         self.mic = MICEstimator(latent_dim, latent_dim, hidden=32)
@@ -296,16 +304,7 @@ class STCrossModel(TorchModel):
     def _net_forward(self, X: torch.Tensor,
                      B_input: torch.Tensor = None,
                      B_future: torch.Tensor = None) -> torch.Tensor:
-        """Forward pass.
-
-        Args:
-            X: (B, H, 1) input flow (per_node reshaped).
-            B_input: (B, H, 1) normal baseline for input window.
-            B_future: (B, P, 1) normal baseline for future window.
-
-        Returns:
-            y_pred: (B, P, 1) final prediction.
-        """
+        """Forward pass."""
         if B_input is None:
             B_input = torch.zeros_like(X)
         if B_future is None:
@@ -314,17 +313,26 @@ class STCrossModel(TorchModel):
         # Step 1: Deviation
         delta = X - B_input  # (B, H, 1)
 
-        # Step 2: Variance normalization
-        std = delta.std(dim=1, keepdim=True) + 1e-4  # (B, 1, 1)
+        # Step 2: Variance normalization (uses self.std_threshold, not hardcoded)
+        std = delta.std(dim=1, keepdim=True) + self.std_threshold  # (B, 1, 1)
         delta_norm = delta / std  # (B, H, 1)
 
         # Step 3: Dual-branch encoding
         z_a, mu, logvar = self.aenc(delta_norm)  # z_a: (B, latent)
-        z_s = self.cenc(delta)  # z_s: (B, latent)
 
         # Step 4: Deviation prediction
-        delta_type, w, dist = self.apb(z_a)  # delta_type: (B, P)
-        delta_adj = self.cad(z_s)  # (B, P)
+        if self.use_proto:
+            delta_type, w, dist = self.apb(z_a)  # delta_type: (B, P)
+        else:
+            delta_type = self.fc_direct(z_a)  # A2: FC替代APB
+            w, dist = None, None
+
+        if self.use_city_branch:
+            z_s = self.cenc(delta)  # z_s: (B, latent)
+            delta_adj = self.cad(z_s)  # (B, P)
+        else:
+            z_s = None
+            delta_adj = torch.zeros_like(delta_type)  # A3: 无城市调整
 
         # Step 5: Final prediction
         y_pred = B_future.squeeze(-1) + delta_type + delta_adj  # (B, P)
@@ -343,14 +351,7 @@ class STCrossModel(TorchModel):
     def _compute_loss(self, y_pred: torch.Tensor, Y: torch.Tensor,
                       delta_true: torch.Tensor,
                       epoch: int = 0) -> Tuple[torch.Tensor, dict]:
-        """Compute combined loss with warmup and MIC clipping.
-
-        Args:
-            y_pred: (B, P, 1) prediction.
-            Y: (B, P, 1) ground truth.
-            delta_true: (B, P) true deviation = Y - B_future.
-            epoch: current epoch (for warmup logic).
-        """
+        """Compute combined loss with warmup, conditional proto/mic."""
         c = self._cache
 
         # L_pred: always active
@@ -366,18 +367,27 @@ class STCrossModel(TorchModel):
             1 + c['logvar'] - c['mu'].pow(2) - c['logvar'].exp(), dim=1
         ).mean()
 
-        # L_proto: triplet margin (top-1 positive, top-2 negative)
-        w_sorted, idx_sorted = c['w'].sort(dim=-1, descending=True)
-        pos_dist = c['dist'].gather(1, idx_sorted[:, 0:1]).squeeze(1)
-        neg_dist = c['dist'].gather(1, idx_sorted[:, 1:2]).squeeze(1)
-        l_proto = F.relu(pos_dist - neg_dist + self.margin).mean()
+        # L_proto: triplet margin (only if use_proto, avoids None.sort())
+        if self.use_proto and c['w'] is not None and self.gamma > 0:
+            w_sorted, idx_sorted = c['w'].sort(dim=-1, descending=True)
+            pos_dist = c['dist'].gather(1, idx_sorted[:, 0:1]).squeeze(1)
+            neg_dist = c['dist'].gather(1, idx_sorted[:, 1:2]).squeeze(1)
+            l_proto = F.relu(pos_dist - neg_dist + self.margin).mean()
+        else:
+            l_proto = torch.tensor(0.0, device=y_pred.device)
 
-        # L_mic: mutual information constraint (clipped for stability)
-        l_mic = self.mic(c['z_s'], c['z_a'].detach())
-        l_mic = l_mic.clamp(-self.mic_clip, self.mic_clip)
+        # L_mic: mutual information constraint (only if use_city_branch and beta>0)
+        if self.use_city_branch and self.beta > 0 and c['z_s'] is not None:
+            l_mic = self.mic(c['z_s'], c['z_a'].detach())
+            l_mic = l_mic.clamp(-self.mic_clip, self.mic_clip)
+        else:
+            l_mic = torch.tensor(0.0, device=y_pred.device)
 
-        # L_adj: CAD drift prevention
-        l_adj = torch.norm(c['delta_adj'], p=2, dim=-1).mean()
+        # L_adj: CAD drift prevention (only if use_city_branch)
+        if self.use_city_branch:
+            l_adj = torch.norm(c['delta_adj'], p=2, dim=-1).mean()
+        else:
+            l_adj = torch.tensor(0.0, device=y_pred.device)
 
         # Total
         loss = (l_pred
@@ -388,10 +398,10 @@ class STCrossModel(TorchModel):
 
         return loss, {
             'pred': l_pred.item(),
-            'cap': l_cap.item(),
-            'mic': l_mic.item(),
-            'proto': l_proto.item(),
-            'adj': l_adj.item(),
+            'cap': l_cap.item() if isinstance(l_cap, torch.Tensor) else 0.0,
+            'mic': l_mic.item() if isinstance(l_mic, torch.Tensor) else 0.0,
+            'proto': l_proto.item() if isinstance(l_proto, torch.Tensor) else 0.0,
+            'adj': l_adj.item() if isinstance(l_adj, torch.Tensor) else 0.0,
         }
 
     def fit(self, train_X: np.ndarray, train_Y: np.ndarray,
@@ -485,18 +495,19 @@ class STCrossModel(TorchModel):
                 torch.nn.utils.clip_grad_norm_(main_params, max_norm=cfg.grad_clip_norm)
                 optimizer.step()
 
-                # MIC two-stage: update estimator every 3 steps (skip during warmup)
-                if epoch > self.warmup_epochs:
+                # MIC two-stage: update estimator every 3 steps (skip during warmup or if disabled)
+                if epoch > self.warmup_epochs and self.use_city_branch and self.beta > 0:
                     mic_step += 1
                     if mic_step % 3 == 0:
                         with torch.no_grad():
                             self._net_forward(X_flat, b_in_flat, b_fut_flat)
                         z_s = self._cache['z_s'].detach()
                         z_a = self._cache['z_a'].detach()
-                        mic_loss = -self.mic(z_s, z_a)  # maximize MI estimate
-                        mic_optimizer.zero_grad()
-                        mic_loss.backward()
-                        mic_optimizer.step()
+                        if z_s is not None:
+                            mic_loss = -self.mic(z_s, z_a)  # maximize MI estimate
+                            mic_optimizer.zero_grad()
+                            mic_loss.backward()
+                            mic_optimizer.step()
 
                 train_total += loss.item()
                 n_train += 1
@@ -634,3 +645,98 @@ class STCrossModel(TorchModel):
         """Fallback predict without NBL (for compatibility)."""
         return self.predict_with_baseline(X, np.zeros_like(X),
                                           np.zeros((X.shape[0], self.P, X.shape[2])))
+
+    def encode(self, X: np.ndarray, b_input: np.ndarray,
+               b_future: np.ndarray) -> tuple:
+        """Extract Z_a and Z_s for visualization (V2 t-SNE, V5 counterfactual).
+
+        Args:
+            X: (B, H, N) input flow.
+            b_input: (B, H, N) NBL for input window.
+            b_future: (B, P, N) NBL for future window.
+
+        Returns:
+            z_a_all: (B*N, latent) anomaly type representations.
+            z_s_all: (B*N, latent) city-specific representations (None if use_city_branch=False).
+        """
+        self.eval()
+        self.to(self._device)
+        X_t = torch.from_numpy(X).float()
+        b_in_t = torch.from_numpy(b_input).float()
+
+        B, H, N = X_t.shape
+        sample_bs = min(self.train_config.batch_size, B)
+        z_a_all, z_s_all = [], []
+
+        with torch.no_grad():
+            for i in range(0, B, sample_bs):
+                end = min(i + sample_bs, B)
+                X_batch = X_t[i:end].to(self._device)
+                bin_batch = b_in_t[i:end].to(self._device)
+                bs = X_batch.size(0)
+                X_flat = X_batch.permute(0, 2, 1).reshape(bs * N, H, 1)
+                bin_flat = bin_batch.permute(0, 2, 1).reshape(bs * N, H, 1)
+                self._net_forward(X_flat, bin_flat)
+                z_a_all.append(self._cache['z_a'].cpu().numpy())
+                if self._cache['z_s'] is not None:
+                    z_s_all.append(self._cache['z_s'].cpu().numpy())
+
+        z_a_np = np.concatenate(z_a_all, axis=0)
+        z_s_np = np.concatenate(z_s_all, axis=0) if z_s_all else None
+        return z_a_np, z_s_np
+
+    def predict_with_decomposition(self, X: np.ndarray, b_input: np.ndarray,
+                                   b_future: np.ndarray) -> dict:
+        """Inference returning decomposed predictions (V3 case study).
+
+        Returns:
+            dict with:
+                'y_pred': (B, P, N) final prediction
+                'baseline': (B, P, N) NBL future baseline
+                'delta_type': (B, P, N) transferable anomaly type deviation
+                'delta_adj': (B, P, N) city-specific adjustment
+        """
+        self.eval()
+        self.to(self._device)
+        X_t = torch.from_numpy(X).float()
+        b_in_t = torch.from_numpy(b_input).float()
+        b_fut_t = torch.from_numpy(b_future).float()
+
+        B, H, N = X_t.shape
+        sample_bs = self.train_config.batch_size
+
+        y_all = np.zeros((B, self.P, N), dtype=np.float32)
+        bl_all = np.zeros((B, self.P, N), dtype=np.float32)
+        dt_all = np.zeros((B, self.P, N), dtype=np.float32)
+        da_all = np.zeros((B, self.P, N), dtype=np.float32)
+
+        with torch.no_grad():
+            for i in range(0, B, sample_bs):
+                end = min(i + sample_bs, B)
+                X_batch = X_t[i:end].to(self._device)
+                bin_batch = b_in_t[i:end].to(self._device)
+                bfut_batch = b_fut_t[i:end].to(self._device)
+                bs = X_batch.size(0)
+                X_flat = X_batch.permute(0, 2, 1).reshape(bs * N, H, 1)
+                bin_flat = bin_batch.permute(0, 2, 1).reshape(bs * N, H, 1)
+                bfut_flat = bfut_batch.permute(0, 2, 1).reshape(bs * N, self.P, 1)
+
+                self._net_forward(X_flat, bin_flat, bfut_flat)
+                c = self._cache
+
+                dt = c['delta_type'].unsqueeze(-1).cpu().numpy()  # (bs*N, P, 1)
+                da = c['delta_adj'].unsqueeze(-1).cpu().numpy()
+                bf = bfut_flat.cpu().numpy()
+                yp = (c['delta_type'] + c['delta_adj'] + bfut_flat.squeeze(-1)).unsqueeze(-1).cpu().numpy()
+
+                dt_all[i:end] = dt.reshape(bs, N, self.P).transpose(0, 2, 1)
+                da_all[i:end] = da.reshape(bs, N, self.P).transpose(0, 2, 1)
+                bl_all[i:end] = bf.reshape(bs, N, self.P).transpose(0, 2, 1)
+                y_all[i:end] = yp.reshape(bs, N, self.P).transpose(0, 2, 1)
+
+        return {
+            'y_pred': y_all,
+            'baseline': bl_all,
+            'delta_type': dt_all,
+            'delta_adj': da_all,
+        }

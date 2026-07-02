@@ -132,9 +132,12 @@ def build_stssdl(config: EvalConfig, train_config: TrainConfig):
 
 
 @register("STCross")
-def build_stcross(config: EvalConfig, train_config: TrainConfig):
+def build_stcross(config: EvalConfig, train_config: TrainConfig, **kwargs):
     from model.stcross import STCrossModel
     return STCrossModel(
         H=config.history_len, P=config.predict_len,
         train_config=train_config,
+        k_protos=kwargs.get('stcross_k', 8),
+        alpha=kwargs.get('stcross_alpha', 0.01),
+        gamma=kwargs.get('stcross_gamma', 0.1),
     )

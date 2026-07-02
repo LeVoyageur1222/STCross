@@ -121,7 +121,7 @@ def _run_ha(settings, output_dir, train_config, force):
 
 
 def _run_per_node_model(model_name, settings, output_dir, train_config, force,
-                        eval_only=False):
+                        eval_only=False, hparams=None):
     """Run a per_node model: train once per source, evaluate on all targets.
 
     With eval_only=True: if a checkpoint exists for the source city, load it
@@ -181,11 +181,18 @@ def _run_per_node_model(model_name, settings, output_dir, train_config, force,
             else:
                 print(f"\n{'='*60}")
                 print(f"  Training: {model_name} on {source} (lr={model_lr:.0e})")
+                if hparams:
+                    print(f"  Hyperparams: {hparams}")
                 print(f"  Will evaluate on targets: {pending_targets}")
                 print(f"{'='*60}")
 
         try:
-            model = MODEL_REGISTRY[model_name](config, model_train_config)
+            build_fn = MODEL_REGISTRY[model_name]
+            # Pass hparams to build function (only STCross uses them)
+            if hparams:
+                model = build_fn(config, model_train_config, **hparams)
+            else:
+                model = build_fn(config, model_train_config)
             evaluator = Evaluator(config)
             log_path = get_log_path(model_train_config, model_name, source)
             if use_checkpoint:
@@ -218,7 +225,7 @@ def _run_per_node_model(model_name, settings, output_dir, train_config, force,
 
 
 def run_experiments(model_names, settings, output_dir="results",
-                    train_config=None, force=False, eval_only=False):
+                    train_config=None, force=False, eval_only=False, hparams=None):
     train_config = train_config or TrainConfig()
     os.makedirs(output_dir, exist_ok=True)
     all_results = []
@@ -233,7 +240,7 @@ def run_experiments(model_names, settings, output_dir="results",
         else:
             all_results.extend(_run_per_node_model(
                 model_name, settings, output_dir, train_config, force,
-                eval_only=eval_only))
+                eval_only=eval_only, hparams=hparams))
 
     return all_results
 
@@ -299,7 +306,21 @@ def main():
     parser.add_argument("--eval_only", action="store_true",
                         help="Load existing checkpoint instead of retraining "
                              "(falls back to training if no checkpoint)")
+    # STCross hyperparameters
+    parser.add_argument("--stcross_k", type=int, default=8,
+                        help="STCross: number of prototypes (K)")
+    parser.add_argument("--stcross_alpha", type=float, default=0.01,
+                        help="STCross: L_cap weight (alpha)")
+    parser.add_argument("--stcross_gamma", type=float, default=0.1,
+                        help="STCross: L_proto weight (gamma)")
     args = parser.parse_args()
+
+    # Build STCross hyperparams dict for registry
+    stcross_hparams = {
+        'stcross_k': args.stcross_k,
+        'stcross_alpha': args.stcross_alpha,
+        'stcross_gamma': args.stcross_gamma,
+    }
 
     if "all" in args.settings:
         settings = EXPERIMENT_MATRIX
@@ -312,7 +333,8 @@ def main():
         lr_scheduler=args.lr_scheduler, early_stop_patience=args.early_stop_patience)
 
     all_results = run_experiments(args.models, settings, args.output_dir, train_config,
-                                  force=args.force, eval_only=args.eval_only)
+                                  force=args.force, eval_only=args.eval_only,
+                                  hparams=stcross_hparams)
     compile_summary(all_results, args.output_dir)
 
 
