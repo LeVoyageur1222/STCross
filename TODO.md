@@ -499,178 +499,58 @@
 - [x] 新增 `use_proto` / `use_city_branch` 构造参数（支持消融变体 A1-A4）
 - [x] 冒烟测试 8 项全通过（logvar/std_threshold/全模型/A2/A3/A4/encode/decomposition）
 
-### 5.4 参数敏感性实验（先导）
+### 5.4 参数敏感性实验 ✅ 已完成
 
-> 方案详见 `doc/ablation_plan.md`（v5）
-> 每参数 4 个值 × 2 方向（NYC→CHI + CHI→NYC）= 8 次训练/步
-> **分步执行**（α→K→γ），最不确定的先跑，减少回头重跑
-> 结果保存到 `results_para/`（与主实验 `results/` 分离）
+> 最优参数组合：α=0.05, K=16, γ=0.1
+> 实际搜索范围：α ∈ {0, 0.001, 0.01, 0.05, 0.1, 0.5}，K ∈ {4, 8, 16, 32}，γ ∈ {0.01, 0.1, 0.3, 0.5}
+> 结果保存在 `results_para/`（step1_alpha/, step2_K/, step3_gamma/）
 
-#### Step 1: α（L_cap 权重）— 最不确定，先跑
+- [x] Step 1: α 搜索 — 结果在 `results_para/step1_alpha/alpha_{val}/`
+- [x] Step 2: K 搜索（在 α* 上） — 结果在 `results_para/step2_K/K_{val}/`
+- [x] Step 3: γ 搜索（在 α*, K* 上） — 结果在 `results_para/step3_gamma/gamma_{val}/`
+- [x] 趋势分析：RMSE 和 R² 在 α 上两方向都满足"先变好再变差"（峰值在 α=0.05）
+- [x] 可视化：6 张折线图已生成（`results_para/sensitivity_{param}_{metric}.png`）
+  - 脚本：`visualization/plot_sensitivity.py`
+  - broken y-axis + Times New Roman + 2位小数 + ~4:3 比例
+  - 指标：RMSE 和 R² × 3 参数 × 2 跨城方向 = 6 张图
 
-> K=8, γ=0.1 固定，变 α
-> 预期最优 α=0.01
+**最优参数确定依据**：跨城 full MAE 平均值为主，辅以 PCC/R²。α=0.05 在 RMSE/R² 两方向都最优；K=16 在 CHI→NYC 4/5 指标最优；γ=0.1 在 NYC→CHI PCC/R² 最优。三个参数整体敏感性低（合理范围内性能接近），说明 STCross 对超参数选择鲁棒。
 
-- [ ] 执行：`bash experiments/sensitivity_step1_alpha.sh`
-- [ ] α ∈ {0, 0.001, 0.01, 0.05}，每个值跑 NYC→CHI + CHI→NYC
-- [ ] 输出目录：`results_para/step1_alpha/alpha_{val}/`
-- [ ] 分析：`python experiments/analyze_sensitivity.py --step 1`
-- [ ] 分析脚本输出最优 α*，并提示"更新 sensitivity_step2_K.sh 中的 ALPHA_STAR"
-- [ ] 手动更新 `sensitivity_step2_K.sh` 中 `ALPHA_STAR=0.01` → 实际最优值
-
-#### Step 2: K（原型数）— 在 α* 上跑
-
-> α=α*(Step 1 最优), γ=0.1 固定，变 K
-> 预期最优 K=8
-
-- [ ] 执行：`bash experiments/sensitivity_step2_K.sh`（需先更新 ALPHA_STAR）
-- [ ] K ∈ {4, 8, 16, 32}，每个值跑 NYC→CHI + CHI→NYC
-- [ ] 输出目录：`results_para/step2_K/K_{val}/`
-- [ ] 分析：`python experiments/analyze_sensitivity.py --step 2`
-- [ ] 分析脚本输出最优 K*，并提示"更新 sensitivity_step3_gamma.sh 中的 K_STAR"
-- [ ] 手动更新 `sensitivity_step3_gamma.sh` 中 `K_STAR=8` → 实际最优值
-
-#### Step 3: γ（L_proto 权重）— 最不确定度最低，最后跑
-
-> α=α*, K=K* 固定，变 γ
-> 预期最优 γ=0.1
-
-- [ ] 执行：`bash experiments/sensitivity_step3_gamma.sh`（需先更新 K_STAR）
-- [ ] γ ∈ {0.01, 0.1, 0.3, 0.5}，每个值跑 NYC→CHI + CHI→NYC
-- [ ] 输出目录：`results_para/step3_gamma/gamma_{val}/`
-- [ ] 分析：`python experiments/analyze_sensitivity.py --step 3`
-- [ ] 分析脚本输出最优 γ*
-
-#### 最终输出
-
-- [ ] 汇总分析：`python experiments/analyze_sensitivity.py --step all`
-- [ ] 输出最终最优组合 (α*, K*, γ*)
-- [ ] 绘制 3 条参数-MAE/PCC 曲线（V4 可视化）
-- [ ] 总计 24 次训练（3步 × 4值 × 2方向）
-
-#### 最优参数确定方式
-
-> 每步的最优参数值如何从实验结果中确定
-
-**指标**：以 **跨城 full MAE 的平均值** 为主要选择标准（NYC→CHI 和 CHI→NYC 两个方向的 full 子集 MAE 取平均），辅以 avg PCC 作为参考。
-
-**为什么用跨城 full MAE 平均值**：
-1. 跨城（而非同城）是 STCross 的核心场景——参数敏感性应在迁移任务上调优
-2. MAE 是交通预测最常用的指标，直观且可解释
-3. 两个方向取平均避免参数在单一方向上过拟合
-4. full 子集（而非 anomaly）覆盖所有测试样本，统计上更稳定
-
-**分析脚本实现**：`analyze_sensitivity.py` 对每个参数值的子目录加载所有 JSON 结果，提取 full MAE，取跨两方向的平均值，选 avg MAE 最低的参数值为最优。同时报告 avg PCC 作为参考。
-
-**示例输出**：
-```
-Step 1: alpha sensitivity analysis
-
-  alpha=0:
-    NYC->CHI        |   0.8234 | ...
-    CHI->NYC        |   1.8567 | ...
-    → Avg MAE: 1.3401
-
-  alpha=0.01:
-    NYC->CHI        |   0.7170 | ...
-    CHI->NYC        |   1.7029 | ...
-    → Avg MAE: 1.2100  ← BEST
-
-  ==========================================================
-  BEST alpha = 0.01 (Avg MAE = 1.2100)
-  → Update ALPHA_STAR=0.01 in experiments/sensitivity_step2_K.sh
-```
-
-#### 回头重跑机制
-
-> 如果上游参数的最优值与预期不符，下游步骤需要在新的最优值上重跑
-
-**重跑场景与操作**：
-
-| 场景 | 影响 | 重跑操作 |
-|------|------|---------|
-| α* ≠ 0.01（如 0.001） | Step 2/3 在错误 α 上跑 | 见下方"重跑步骤 A" |
-| α*=0.01 但 K* ≠ 8（如 4） | Step 3 在错误 K 上跑 | 见下方"重跑步骤 B" |
-| γ* ≠ 0.1 | 无下游依赖 | **无需重跑** |
-
-**重跑成本**：
-- 全部符合预期：24 次，无重跑
-- α 意外：+16 次（重跑 Step 2 的 8 次 + Step 3 的 8 次）= 40 次
-- K 意外：+8 次（重跑 Step 3）= 32 次
-- γ 意外：0 次重跑
-
-**重跑时无需清理旧结果**：每个参数值有独立子目录（`alpha_0.001/` vs `alpha_0.01/`），重跑用 `--force` 在同一子目录覆盖，旧的非最优结果保留在各自的子目录中可供对比。
-
-**重跑步骤 A：α 意外（α* ≠ 0.01）**
-
-```bash
-# 1. Step 1 分析已确定 α*（如 0.001）
-python experiments/analyze_sensitivity.py --step 1
-# 输出: BEST alpha = 0.001
-
-# 2. 更新 Step 2 脚本中的 ALPHA_STAR
-sed -i 's/ALPHA_STAR=0.01/ALPHA_STAR=0.001/' experiments/sensitivity_step2_K.sh
-# 或手动编辑 experiments/sensitivity_step2_K.sh 将 ALPHA_STAR=0.01 改为 0.001
-
-# 3. 重跑 Step 2（在新的 α* 上搜索 K）
-bash experiments/sensitivity_step2_K.sh
-# 结果保存到 results_para/step2_K/K_*/（--force 覆盖旧结果）
-
-# 4. 分析 Step 2，确定 K*
-python experiments/analyze_sensitivity.py --step 2
-# 输出: BEST K = 8
-
-# 5. 更新 Step 3 脚本中的 ALPHA_STAR 和 K_STAR
-sed -i 's/ALPHA_STAR=0.01/ALPHA_STAR=0.001/' experiments/sensitivity_step3_gamma.sh
-# K_STAR 不变（仍为 8），无需修改
-
-# 6. 重跑 Step 3（在新的 α* 和 K* 上搜索 γ）
-bash experiments/sensitivity_step3_gamma.sh
-
-# 7. 最终分析
-python experiments/analyze_sensitivity.py --step all
-```
-
-**重跑步骤 B：K 意外（K* ≠ 8，α* 符合预期）**
-
-```bash
-# 1. Step 2 分析已确定 K*（如 4）
-python experiments/analyze_sensitivity.py --step 2
-# 输出: BEST K = 4
-
-# 2. 更新 Step 3 脚本中的 K_STAR
-sed -i 's/K_STAR=8/K_STAR=4/' experiments/sensitivity_step3_gamma.sh
-# ALPHA_STAR 不变（已正确），无需修改
-
-# 3. 重跑 Step 3（在新的 K* 上搜索 γ）
-bash experiments/sensitivity_step3_gamma.sh
-
-# 4. 最终分析
-python experiments/analyze_sensitivity.py --step all
-```
-
-### 5.5 消融实验（在最优参数上）
+### 5.5 消融实验（在最优参数 α=0.05, K=16, γ=0.1 上）
 
 > 4 个变体，每个只改一个维度，附证伪条件
-> 在 5.4 确定的最优参数组合上运行
+> 设置：NYC→NYC（同城）+ NYC→CHI（跨城），patience=10
+> 运行命令：`python experiments/run_all.py --models STCross --settings all --force --stcross_k 16 --stcross_alpha 0.05 --stcross_gamma 0.1`（完整模型，作为对照）
 
-- [ ] **A1 (STCross_w/o DevSpace)**: 绝对值空间+原型 → 验证偏差空间的必要性（DIP-①）
-- [ ] **A2 (STCross_w/o ProtoBank)**: 偏差空间+FC → 验证原型匹配的必要性（DIP-②）
-- [ ] **A3 (STCross_w/o CityBranch)**: 去城市分支(CEnc+CAD+MIC) → 验证城市调整的边际贡献（DDAC-③）
-- [ ] **A4 (STCross_w/o MIC)**: 保留城市分支，仅关MIC → 验证MIC冗余去除的边际贡献（DDAC第3层）
+- [ ] **A1 (STCross_w/o DevSpace)**: 绝对值空间+原型（use_proto=True, 但去掉 NBL+归一化+L_cap）→ 验证偏差空间的必要性（DIP-①）
+- [ ] **A2 (STCross_w/o ProtoBank)**: 偏差空间+FC（use_proto=False）→ 验证原型匹配的必要性（DIP-②）
+- [ ] **A3 (STCross_w/o CityBranch)**: 去城市分支（use_city_branch=False）→ 验证城市调整的边际贡献（DDAC-③）
+- [ ] **A4 (STCross_w/o MIC)**: 保留城市分支，β=0 → 验证 MIC 冗余去除的边际贡献（DDAC 第3层）
 - [ ] **用户运行**（4 变体 × 2 设置 = 8 次实验）
+- [ ] 结果收集 → 更新 RESULTS.md
 
 ### 5.6 可视化
 
-> 5 项，含定量指标
+> 5 项，代码在 `visualization/` 目录
 
-- [ ] **V1: 偏差原型 pattern** — K=8 原型的 Δ̂_type 曲线（DIP 可解释性）
-- [ ] **V2: Z_a/Z_s 城市不变性** — t-SNE + domain classifier accuracy（Z_a≈50% / Z_s>70%）
+- [x] **V4: 参数敏感性曲线** — 6 张图已生成（`results_para/sensitivity_*.png`）
+- [ ] **V1: 偏差原型 pattern** — K=16 原型的 Δ̂_type 曲线（DIP 可解释性）
+  - 代码：`model.apb.pattern.detach().numpy()`，直接取参数
+- [ ] **V2: Z_a/Z_s 城市不变性** — t-SNE（定性）+ domain classifier accuracy（定量）
+  - 接口：`model.encode()` 已实现
+  - 指标：Z_a 城市分类≈50%（不变）；Z_s>70%（特定）；raw Δ 上界>90%
 - [ ] **V3: 预测曲线 Case Study** — STCross vs DAN vs HA，标注 NBL/Δ̂_type/Δ̂_adj 分解
-- [ ] **V4: 参数敏感性曲线** — S1-S3 参数-MAE/PCC 曲线
-- [ ] **V5: 反事实测试** — 交换 Z_s，验证类型不变幅度变（DDAC 最强证据）
+  - 接口：`model.predict_with_decomposition()` 已实现
+- [ ] **V5: 反事实测试** — 交换 NYC/CHI 的 Z_s，验证类型不变幅度变
+  - 需新增：`model.predict_with_swapped_zs()` 接口（~25 行）
+  - 指标：Δ̂_type 余弦>0.95 且 Δ̂_adj L2 显著改变
 
 ### 5.7 附录补充实验
+
+> 放入论文附录，不占正文篇幅
+
+- [ ] **F1: NBL 基线消融** — normal-only vs full HA → 基线纯度价值
+- [ ] **H1: 假设检验** — P(Δ|event) NYC vs CHI Wasserstein 距离 → 可迁移性假设（非训练）
 
 > 放入论文附录，不占正文篇幅
 
