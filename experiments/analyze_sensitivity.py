@@ -154,7 +154,7 @@ def main():
 
     if args.step == "1":
         analyze_step_subdirs(1, "results_para/step1_alpha", "alpha",
-                             [0, 0.001, 0.01, 0.05])
+                             [0, 0.001, 0.01, 0.05, 0.1, 0.5])
     elif args.step == "2":
         analyze_step_subdirs(2, "results_para/step2_K", "K",
                              [4, 8, 16, 32])
@@ -167,7 +167,7 @@ def main():
         print("="*70)
 
         best_alpha = analyze_step_subdirs(1, "results_para/step1_alpha", "alpha",
-                                          [0, 0.001, 0.01, 0.05])
+                                          [0, 0.001, 0.01, 0.05, 0.1, 0.5])
         best_k = analyze_step_subdirs(2, "results_para/step2_K", "K",
                                       [4, 8, 16, 32])
         best_gamma = analyze_step_subdirs(3, "results_para/step3_gamma", "gamma",
