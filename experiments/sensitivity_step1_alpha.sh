@@ -11,7 +11,8 @@ cd "$(dirname "$0")/.."
 BASE_DIR="results_para/step1_alpha"
 
 # for ALPHA in 0 0.001 0.01 0.05; do
-for ALPHA in 0.1 0.5; do
+# for ALPHA in 0.1 0.5; do
+for ALPHA in 0 0.001 0.01 0.05 0.1 0.5; do
     OUTPUT_DIR="${BASE_DIR}/alpha_${ALPHA}"
     echo "=========================================="
     echo "  Step 1: alpha=$ALPHA (K=8, gamma=0.1)"
@@ -23,7 +24,7 @@ for ALPHA in 0.1 0.5; do
         --output_dir "$OUTPUT_DIR" \
         --force \
         --early_stop_patience 10 \
-        --stcross_k 8 \
+        --stcross_k 16 \
         --stcross_alpha $ALPHA \
         --stcross_gamma 0.1
     echo ""

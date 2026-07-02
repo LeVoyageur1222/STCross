@@ -13,8 +13,8 @@ set -e
 cd "$(dirname "$0")/.."
 
 # === UPDATE THESE VALUES based on Steps 1-2 analysis ===
-ALPHA_STAR=0.01
-K_STAR=8
+ALPHA_STAR=0.05
+K_STAR=16
 # =========================================================
 
 BASE_DIR="results_para/step3_gamma"
