@@ -15,7 +15,7 @@ BASE_DIR="results_para/step1_alpha"
 for ALPHA in 0 0.001 0.01 0.05 0.1 0.5; do
     OUTPUT_DIR="${BASE_DIR}/alpha_${ALPHA}"
     echo "=========================================="
-    echo "  Step 1: alpha=$ALPHA (K=8, gamma=0.1)"
+    echo "  Step 1: alpha=$ALPHA (K=16, gamma=0.1)"
     echo "  Output: $OUTPUT_DIR"
     echo "=========================================="
     python experiments/run_all.py \
