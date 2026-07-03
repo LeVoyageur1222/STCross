@@ -1,9 +1,9 @@
 #!/bin/bash
 # Step 3: γ (L_proto weight) sensitivity — run after Step 2
-# Fixed: alpha=ALPHA_STAR, K=K_STAR (from Steps 1-2), NYC→CHI + CHI→NYC
+# Fixed: alpha=ALPHA_STAR, K=K_STAR (from Steps 1-2), all 4 settings
 # Output: results_para/step3_gamma/gamma_{value}/
 #
-# IMPORTANT: Replace ALPHA_STAR and K_STAR below with optimal values from Steps 1-2.
+# IMPORTANT: Update ALPHA_STAR and K_STAR below with optimal values from Steps 1-2.
 # Run: python experiments/analyze_sensitivity.py --step 2
 # to find the optimal K, then update below.
 #
@@ -19,6 +19,8 @@ cd "$(dirname "$0")/.."
 ALPHA_STAR=0.05
 K_STAR=16
 # =========================================================
+
+rm -rf results_para/step3_gamma
 
 BASE_DIR="results_para/step3_gamma"
 
