@@ -10,6 +10,7 @@
 # Usage: bash experiments/sensitivity_step2_K.sh
 
 set -e
+export PYTHONHASHSEED=42
 cd "$(dirname "$0")/.."
 
 # === UPDATE THIS VALUE based on Step 1 analysis ===

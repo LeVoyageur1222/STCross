@@ -10,6 +10,7 @@
 # Usage: bash experiments/sensitivity_step3_gamma.sh
 
 set -e
+export PYTHONHASHSEED=42
 cd "$(dirname "$0")/.."
 
 # === UPDATE THESE VALUES based on Steps 1-2 analysis ===

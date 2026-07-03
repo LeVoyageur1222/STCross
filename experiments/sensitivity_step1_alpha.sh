@@ -6,6 +6,7 @@
 # Usage: bash experiments/sensitivity_step1_alpha.sh
 
 set -e
+export PYTHONHASHSEED=42
 cd "$(dirname "$0")/.."
 
 BASE_DIR="results_para/step1_alpha"

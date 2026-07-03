@@ -130,9 +130,12 @@ class VariationalLSTM(nn.Module):
         mu = self.fc_mu(h)             # (B, latent)
         logvar = self.fc_logvar(h)     # (B, latent)
         logvar = logvar.clamp(-8, 4)   # prevent NaN at high alpha
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        z = mu + eps * std             # reparameterization
+        if self.training:
+            std = torch.exp(0.5 * logvar)
+            eps = torch.randn_like(std)
+            z = mu + eps * std         # reparameterization (train only)
+        else:
+            z = mu                     # eval: deterministic, use mean
         return z, mu, logvar
 
 
@@ -428,6 +431,7 @@ class STCrossModel(TorchModel):
         B_input/B_future arrays are precomputed NBL lookups aligned with X/Y.
         """
         cfg = self.train_config
+        set_seed(cfg.seed)  # Critical: STCross has custom loop, must seed explicitly
         self._source_city = getattr(self, '_source_city', '')
         ckpt_name = self._get_checkpoint_name()
 

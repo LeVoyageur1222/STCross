@@ -7,6 +7,7 @@
 # Usage: bash experiments/run_ablation.sh
 
 set -e
+export PYTHONHASHSEED=42
 cd "$(dirname "$0")/.."
 
 OUTPUT_DIR="results_ablation"
