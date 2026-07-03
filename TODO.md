@@ -518,16 +518,30 @@
 
 ### 5.5 消融实验（在最优参数 α=0.05, K=16, γ=0.1 上）
 
-> 4 个变体，每个只改一个维度，附证伪条件
-> 设置：NYC→NYC（同城）+ NYC→CHI（跨城），patience=10
-> 运行命令：`python experiments/run_all.py --models STCross --settings all --force --stcross_k 16 --stcross_alpha 0.05 --stcross_gamma 0.1`（完整模型，作为对照）
+> 4 个变体 + 1 个对照（完整 STCross），每个跑 NYC→NYC + NYC→CHI = 10 次训练
+> 代码已就绪：`use_deviation_space` / `use_proto` / `use_city_branch` / `beta` 参数已支持
+> CLI 已支持：`--no_devspace` / `--no_proto` / `--no_city_branch` / `--stcross_beta`
 
-- [ ] **A1 (STCross_w/o DevSpace)**: 绝对值空间+原型（use_proto=True, 但去掉 NBL+归一化+L_cap）→ 验证偏差空间的必要性（DIP-①）
-- [ ] **A2 (STCross_w/o ProtoBank)**: 偏差空间+FC（use_proto=False）→ 验证原型匹配的必要性（DIP-②）
-- [ ] **A3 (STCross_w/o CityBranch)**: 去城市分支（use_city_branch=False）→ 验证城市调整的边际贡献（DDAC-③）
-- [ ] **A4 (STCross_w/o MIC)**: 保留城市分支，β=0 → 验证 MIC 冗余去除的边际贡献（DDAC 第3层）
-- [ ] **用户运行**（4 变体 × 2 设置 = 8 次实验）
-- [ ] 结果收集 → 更新 RESULTS.md
+#### 运行方式
+
+```bash
+# 一键运行全部消融实验（control + A1-A4）
+bash experiments/run_ablation.sh
+```
+
+脚本会依次运行 5 组实验，结果保存在 `results_ablation/` 下：
+
+| 子目录 | 变体 | 改动 | CLI flag |
+|--------|------|------|----------|
+| `control/` | 完整 STCross | 无（α=0.05, K=16, γ=0.1, β=0.01） | — |
+| `A1_no_devspace/` | STCross_w/o DevSpace | 去偏差空间+归一化+L_cap（α=0） | `--no_devspace --stcross_alpha 0` |
+| `A2_no_proto/` | STCross_w/o ProtoBank | APB→FC | `--no_proto` |
+| `A3_no_citybranch/` | STCross_w/o CityBranch | 去CEnc+CAD+MIC | `--no_city_branch` |
+| `A4_no_mic/` | STCross_w/o MIC | β=0 | `--stcross_beta 0` |
+
+- [ ] **用户运行**：`bash experiments/run_ablation.sh`
+- [ ] 结果收集 → 更新 RESULTS.md（消融表格）
+- [ ] 分析各组件贡献
 
 ### 5.6 可视化
 

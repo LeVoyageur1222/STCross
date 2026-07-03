@@ -139,5 +139,9 @@ def build_stcross(config: EvalConfig, train_config: TrainConfig, **kwargs):
         train_config=train_config,
         k_protos=kwargs.get('stcross_k', 8),
         alpha=kwargs.get('stcross_alpha', 0.01),
+        beta=kwargs.get('stcross_beta', 0.01),
         gamma=kwargs.get('stcross_gamma', 0.1),
+        use_proto=kwargs.get('stcross_use_proto', True),
+        use_city_branch=kwargs.get('stcross_use_city_branch', True),
+        use_deviation_space=kwargs.get('stcross_use_deviation_space', True),
     )

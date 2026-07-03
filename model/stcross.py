@@ -270,6 +270,7 @@ class STCrossModel(TorchModel):
                  mic_clip: float = 5.0,  # clip MIC loss to [-clip, clip]
                  use_proto: bool = True,       # A2: False → FC替代APB
                  use_city_branch: bool = True,  # A3: False → 去掉CEnc+CAD+MIC
+                 use_deviation_space: bool = True,  # A1: False → 绝对值空间
                  train_config: TrainConfig = None):
         super().__init__(train_config=train_config)
         self.P = P
@@ -284,6 +285,7 @@ class STCrossModel(TorchModel):
         self.mic_clip = mic_clip
         self.use_proto = use_proto
         self.use_city_branch = use_city_branch
+        self.use_deviation_space = use_deviation_space
 
         # DIP components
         self.aenc = VariationalLSTM(1, hidden_dim, latent_dim, n_layers=2, dropout=dropout)
@@ -310,12 +312,19 @@ class STCrossModel(TorchModel):
         if B_future is None:
             B_future = torch.zeros(X.size(0), self.P, 1, device=X.device)
 
-        # Step 1: Deviation
-        delta = X - B_input  # (B, H, 1)
+        # Step 1: Deviation (or absolute value if use_deviation_space=False)
+        if self.use_deviation_space:
+            delta = X - B_input  # (B, H, 1)
+        else:
+            delta = X  # A1: absolute value, no baseline subtraction
 
-        # Step 2: Variance normalization (uses self.std_threshold, not hardcoded)
-        std = delta.std(dim=1, keepdim=True) + self.std_threshold  # (B, 1, 1)
-        delta_norm = delta / std  # (B, H, 1)
+        # Step 2: Variance normalization (skip if use_deviation_space=False)
+        if self.use_deviation_space:
+            std = delta.std(dim=1, keepdim=True) + self.std_threshold  # (B, 1, 1)
+            delta_norm = delta / std  # (B, H, 1)
+        else:
+            std = None  # A1: no normalization
+            delta_norm = delta
 
         # Step 3: Dual-branch encoding
         z_a, mu, logvar = self.aenc(delta_norm)  # z_a: (B, latent)
@@ -335,7 +344,10 @@ class STCrossModel(TorchModel):
             delta_adj = torch.zeros_like(delta_type)  # A3: 无城市调整
 
         # Step 5: Final prediction
-        y_pred = B_future.squeeze(-1) + delta_type + delta_adj  # (B, P)
+        if self.use_deviation_space:
+            y_pred = B_future.squeeze(-1) + delta_type + delta_adj  # (B, P)
+        else:
+            y_pred = delta_type + delta_adj  # A1: no baseline
 
         # Cache for loss computation
         self._cache = {

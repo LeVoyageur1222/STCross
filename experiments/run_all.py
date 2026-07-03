@@ -311,15 +311,28 @@ def main():
                         help="STCross: number of prototypes (K)")
     parser.add_argument("--stcross_alpha", type=float, default=0.01,
                         help="STCross: L_cap weight (alpha)")
+    parser.add_argument("--stcross_beta", type=float, default=0.01,
+                        help="STCross: L_mic weight (beta)")
     parser.add_argument("--stcross_gamma", type=float, default=0.1,
                         help="STCross: L_proto weight (gamma)")
+    # Ablation flags (store_true = disable that component)
+    parser.add_argument("--no_proto", action="store_true",
+                        help="A2: disable prototype matching (FC替代APB)")
+    parser.add_argument("--no_city_branch", action="store_true",
+                        help="A3: disable city branch (CEnc+CAD+MIC)")
+    parser.add_argument("--no_devspace", action="store_true",
+                        help="A1: disable deviation space (absolute value)")
     args = parser.parse_args()
 
     # Build STCross hyperparams dict for registry
     stcross_hparams = {
         'stcross_k': args.stcross_k,
         'stcross_alpha': args.stcross_alpha,
+        'stcross_beta': args.stcross_beta,
         'stcross_gamma': args.stcross_gamma,
+        'stcross_use_proto': not args.no_proto,
+        'stcross_use_city_branch': not args.no_city_branch,
+        'stcross_use_deviation_space': not args.no_devspace,
     }
 
     if "all" in args.settings:
