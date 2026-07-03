@@ -16,7 +16,7 @@ export CUBLAS_WORKSPACE_CONFIG=:4096:8
 cd "$(dirname "$0")/.."
 
 # === UPDATE THESE VALUES based on Steps 1-2 analysis ===
-ALPHA_STAR=0.05
+ALPHA_STAR=0.01
 K_STAR=16
 # =========================================================
 
