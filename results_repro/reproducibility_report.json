@@ -1,0 +1,12 @@
+{
+  "run1_dir": "/root/STCross/results_repro/run1",
+  "run2_dir": "/root/STCross/results_repro/run2",
+  "params": {
+    "K": 16,
+    "alpha": 0.05,
+    "gamma": 0.1,
+    "beta": 0.01
+  },
+  "all_identical": false,
+  "PYTHONHASHSEED": "42"
+}
