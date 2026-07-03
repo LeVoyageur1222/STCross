@@ -7,7 +7,9 @@
 # Usage: bash experiments/run_ablation.sh
 
 set -e
-export PYTHONHASHSEED=42
+SEED=42
+export PYTHONHASHSEED=$SEED
+export CUBLAS_WORKSPACE_CONFIG=:4096:8
 cd "$(dirname "$0")/.."
 
 OUTPUT_DIR="results_ablation"
@@ -33,6 +35,7 @@ python experiments/run_all.py \
     --models STCross --settings all \
     --output_dir "${OUTPUT_DIR}/control" \
     --force --early_stop_patience 10 \
+    --seed $SEED \
     --stcross_k $K --stcross_alpha $ALPHA \
     --stcross_gamma $GAMMA --stcross_beta $BETA
 echo ""
@@ -45,6 +48,7 @@ python experiments/run_all.py \
     --models STCross --settings all \
     --output_dir "${OUTPUT_DIR}/A1_no_devspace" \
     --force --early_stop_patience 15 \
+    --seed $SEED \
     --stcross_k $K --stcross_alpha 0 \
     --stcross_gamma $GAMMA --stcross_beta $BETA \
     --no_devspace
@@ -58,6 +62,7 @@ python experiments/run_all.py \
     --models STCross --settings all \
     --output_dir "${OUTPUT_DIR}/A2_no_proto" \
     --force --early_stop_patience 10 \
+    --seed $SEED \
     --stcross_k $K --stcross_alpha $ALPHA \
     --stcross_gamma $GAMMA --stcross_beta $BETA \
     --no_proto
@@ -71,6 +76,7 @@ python experiments/run_all.py \
     --models STCross --settings all \
     --output_dir "${OUTPUT_DIR}/A3_no_citybranch" \
     --force --early_stop_patience 10 \
+    --seed $SEED \
     --stcross_k $K --stcross_alpha $ALPHA \
     --stcross_gamma $GAMMA --stcross_beta $BETA \
     --no_city_branch
@@ -84,6 +90,7 @@ python experiments/run_all.py \
     --models STCross --settings all \
     --output_dir "${OUTPUT_DIR}/A4_no_mic" \
     --force --early_stop_patience 10 \
+    --seed $SEED \
     --stcross_k $K --stcross_alpha $ALPHA \
     --stcross_gamma $GAMMA --stcross_beta 0
 echo ""

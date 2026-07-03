@@ -10,7 +10,9 @@
 # Usage: bash experiments/sensitivity_step2_K.sh
 
 set -e
-export PYTHONHASHSEED=42
+SEED=42
+export PYTHONHASHSEED=$SEED
+export CUBLAS_WORKSPACE_CONFIG=:4096:8
 cd "$(dirname "$0")/.."
 
 # === UPDATE THIS VALUE based on Step 1 analysis ===
@@ -31,6 +33,7 @@ for K in 4 8 16 32; do
         --output_dir "$OUTPUT_DIR" \
         --force \
         --early_stop_patience 10 \
+        --seed $SEED \
         --stcross_k $K \
         --stcross_alpha $ALPHA_STAR \
         --stcross_gamma 0.1

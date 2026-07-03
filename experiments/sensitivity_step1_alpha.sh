@@ -6,7 +6,9 @@
 # Usage: bash experiments/sensitivity_step1_alpha.sh
 
 set -e
-export PYTHONHASHSEED=42
+SEED=42
+export PYTHONHASHSEED=$SEED
+export CUBLAS_WORKSPACE_CONFIG=:4096:8
 cd "$(dirname "$0")/.."
 
 BASE_DIR="results_para/step1_alpha"
@@ -25,6 +27,7 @@ for ALPHA in 0 0.001 0.01 0.05 0.1 0.5; do
         --output_dir "$OUTPUT_DIR" \
         --force \
         --early_stop_patience 10 \
+        --seed $SEED \
         --stcross_k 16 \
         --stcross_alpha $ALPHA \
         --stcross_gamma 0.1

@@ -5,7 +5,9 @@
 # Usage: bash experiments/run_reproducibility.sh
 
 set -e
-export PYTHONHASHSEED=42
+SEED=42
+export PYTHONHASHSEED=$SEED
+export CUBLAS_WORKSPACE_CONFIG=:4096:8
 cd "$(dirname "$0")/.."
 
 python experiments/test_reproducibility.py

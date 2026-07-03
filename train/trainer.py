@@ -41,6 +41,7 @@ class TrainConfig:
 def set_seed(seed: int):
     """Set all random seeds for full reproducibility."""
     os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'  # CuBLAS deterministic matmul
     import random
     random.seed(seed)
     np.random.seed(seed)

@@ -296,6 +296,8 @@ def main():
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--early_stop_patience", type=int, default=30,
                         help="Early stopping patience (epochs without improvement)")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed for reproducibility")
     parser.add_argument("--lr", type=float, default=None,
                         help="Learning rate (if None, uses per-model default)")
     parser.add_argument("--lr_scheduler", type=str, default="cosine",
@@ -343,7 +345,8 @@ def main():
     base_lr = args.lr if args.lr is not None else 1e-3
     train_config = TrainConfig(
         epochs=args.epochs, batch_size=args.batch_size, lr=base_lr,
-        lr_scheduler=args.lr_scheduler, early_stop_patience=args.early_stop_patience)
+        lr_scheduler=args.lr_scheduler, early_stop_patience=args.early_stop_patience,
+        seed=args.seed)
 
     all_results = run_experiments(args.models, settings, args.output_dir, train_config,
                                   force=args.force, eval_only=args.eval_only,

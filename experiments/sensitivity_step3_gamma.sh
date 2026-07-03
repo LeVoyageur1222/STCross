@@ -10,7 +10,9 @@
 # Usage: bash experiments/sensitivity_step3_gamma.sh
 
 set -e
-export PYTHONHASHSEED=42
+SEED=42
+export PYTHONHASHSEED=$SEED
+export CUBLAS_WORKSPACE_CONFIG=:4096:8
 cd "$(dirname "$0")/.."
 
 # === UPDATE THESE VALUES based on Steps 1-2 analysis ===
@@ -32,6 +34,7 @@ for GAMMA in 0.01 0.1 0.3 0.5; do
         --output_dir "$OUTPUT_DIR" \
         --force \
         --early_stop_patience 10 \
+        --seed $SEED \
         --stcross_k $K_STAR \
         --stcross_alpha $ALPHA_STAR \
         --stcross_gamma $GAMMA
