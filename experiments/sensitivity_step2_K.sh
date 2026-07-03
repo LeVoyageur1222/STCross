@@ -16,14 +16,15 @@ export CUBLAS_WORKSPACE_CONFIG=:4096:8
 cd "$(dirname "$0")/.."
 
 # === UPDATE THIS VALUE based on Step 1 analysis ===
-ALPHA_STAR=0.05
+ALPHA_STAR=0.01
 # =================================================
 
 rm -rf results_para/step2_K
 
 BASE_DIR="results_para/step2_K"
 
-for K in 4 8 16 32; do
+# for K in 4 8 16 32; do
+for K in 1 2 4 8 16 32; do
     OUTPUT_DIR="${BASE_DIR}/K_${K}"
     echo "=========================================="
     echo "  Step 2: K=$K (alpha=$ALPHA_STAR, gamma=0.1)"
