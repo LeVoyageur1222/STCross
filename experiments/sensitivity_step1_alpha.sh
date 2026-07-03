@@ -31,7 +31,7 @@ for ALPHA in 0.01 0.05 0.1 0.5; do
         --seed $SEED \
         --stcross_k 2 \
         --stcross_alpha $ALPHA \
-        --stcross_gamma 0.1
+        --stcross_gamma 0.5
     echo ""
 done
 

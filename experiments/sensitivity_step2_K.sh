@@ -39,7 +39,7 @@ for K in 1 2 4 8 16 32; do
         --seed $SEED \
         --stcross_k $K \
         --stcross_alpha $ALPHA_STAR \
-        --stcross_gamma 0.1
+        --stcross_gamma 0.5
     echo ""
 done
 
