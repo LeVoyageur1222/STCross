@@ -157,7 +157,7 @@ def main():
                              [0, 0.001, 0.01, 0.05, 0.1, 0.5])
     elif args.step == "2":
         analyze_step_subdirs(2, "results_para/step2_K", "K",
-                             [4, 8, 16, 32])
+                             [1, 2, 4, 8, 16, 32])
     elif args.step == "3":
         analyze_step_subdirs(3, "results_para/step3_gamma", "gamma",
                              [0.01, 0.1, 0.3, 0.5])

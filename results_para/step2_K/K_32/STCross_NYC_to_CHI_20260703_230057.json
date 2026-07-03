@@ -1,6 +1,6 @@
 {
   "model": "STCross",
-  "source_city": "CHI",
+  "source_city": "NYC",
   "target_city": "CHI",
   "history_len": 12,
   "predict_len": 12,
@@ -12,27 +12,27 @@
   "subsets": {
     "full": {
       "count": 5761,
-      "MAE": 0.7357,
-      "RMSE": 1.9443,
-      "MAPE": 60.33,
-      "PCC": 0.7734,
-      "R2": 0.5552
+      "MAE": 0.7466,
+      "RMSE": 1.9325,
+      "MAPE": 61.88,
+      "PCC": 0.7718,
+      "R2": 0.5607
     },
     "anomaly": {
       "count": 398,
-      "MAE": 0.6694,
-      "RMSE": 1.8301,
-      "MAPE": 69.18,
-      "PCC": 0.6487,
-      "R2": 0.4206
+      "MAE": 0.6818,
+      "RMSE": 1.8118,
+      "MAPE": 71.07,
+      "PCC": 0.6576,
+      "R2": 0.4322
     },
     "normal": {
       "count": 5363,
-      "MAE": 0.7406,
-      "RMSE": 1.9526,
-      "MAPE": 59.82,
-      "PCC": 0.7809,
-      "R2": 0.5616
+      "MAE": 0.7514,
+      "RMSE": 1.9411,
+      "MAPE": 61.34,
+      "PCC": 0.7786,
+      "R2": 0.5667
     }
   }
 }

@@ -17,14 +17,14 @@ cd "$(dirname "$0")/.."
 
 # === UPDATE THESE VALUES based on Steps 1-2 analysis ===
 ALPHA_STAR=0.01
-K_STAR=16
+K_STAR=2
 # =========================================================
 
 rm -rf results_para/step3_gamma
 
 BASE_DIR="results_para/step3_gamma"
 
-for GAMMA in 0.01 0.1 0.3 0.5; do
+for GAMMA in 0.01 0.1 0.3 0.5 0.7; do
     OUTPUT_DIR="${BASE_DIR}/gamma_${GAMMA}"
     echo "=========================================="
     echo "  Step 3: gamma=$GAMMA (alpha=$ALPHA_STAR, K=$K_STAR)"
