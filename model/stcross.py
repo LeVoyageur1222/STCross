@@ -382,8 +382,8 @@ class STCrossModel(TorchModel):
             1 + c['logvar'] - c['mu'].pow(2) - c['logvar'].exp(), dim=1
         ).mean()
 
-        # L_proto: triplet margin (only if use_proto, avoids None.sort())
-        if self.use_proto and c['w'] is not None and self.gamma > 0:
+        # L_proto: triplet margin (only if use_proto and K>=2, avoids None.sort() and K=1 crash)
+        if self.use_proto and c['w'] is not None and self.gamma > 0 and c['dist'] is not None and c['dist'].size(1) >= 2:
             w_sorted, idx_sorted = c['w'].sort(dim=-1, descending=True)
             pos_dist = c['dist'].gather(1, idx_sorted[:, 0:1]).squeeze(1)
             neg_dist = c['dist'].gather(1, idx_sorted[:, 1:2]).squeeze(1)
