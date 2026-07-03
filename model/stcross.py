@@ -449,8 +449,12 @@ class STCrossModel(TorchModel):
             cfg.batch_size, shuffle=False)
 
         # Optimizers: main params + MIC estimator (separate lr schedule)
-        main_params = list(self.aenc.parameters()) + list(self.apb.parameters()) \
-            + list(self.cenc.parameters()) + list(self.cad.parameters())
+        main_params = list(self.aenc.parameters()) + list(self.cenc.parameters()) \
+            + list(self.cad.parameters())
+        if self.use_proto:
+            main_params += list(self.apb.parameters())
+        else:
+            main_params += list(self.fc_direct.parameters())
         mic_params = list(self.mic.parameters())
 
         optimizer = torch.optim.Adam(main_params, lr=cfg.lr,
