@@ -20,7 +20,7 @@ ALPHA_STAR=0.01
 K_STAR=2
 # =========================================================
 
-rm -rf results_para/step3_gamma
+# rm -rf results_para/step3_gamma
 
 BASE_DIR="results_para/step3_gamma"
 

@@ -19,7 +19,7 @@ cd "$(dirname "$0")/.."
 ALPHA_STAR=0.01
 # =================================================
 
-rm -rf results_para/step2_K
+# rm -rf results_para/step2_K
 
 BASE_DIR="results_para/step2_K"
 

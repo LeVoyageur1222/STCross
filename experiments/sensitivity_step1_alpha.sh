@@ -12,11 +12,12 @@ export CUBLAS_WORKSPACE_CONFIG=:4096:8
 cd "$(dirname "$0")/.."
 
 # Clean old results (had 6 values, now 4)
-rm -rf results_para/step1_alpha
+# rm -rf results_para/step1_alpha
 
 BASE_DIR="results_para/step1_alpha"
 
-for ALPHA in 0 0.01 0.03 0.05 0.1 0.5; do
+# for ALPHA in 0 0.01 0.03 0.05 0.1 0.3 0.5 0.7; do
+for ALPHA in 0.9; do
     OUTPUT_DIR="${BASE_DIR}/alpha_${ALPHA}"
     echo "=========================================="
     echo "  Step 1: alpha=$ALPHA (K=16, gamma=0.1)"
