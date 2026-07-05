@@ -1,0 +1,38 @@
+{
+  "model": "STCross",
+  "source_city": "CHI",
+  "target_city": "CHI",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 0.7374,
+      "RMSE": 1.941,
+      "MAPE": 60.45,
+      "PCC": 0.7735,
+      "R2": 0.5568
+    },
+    "anomaly": {
+      "count": 398,
+      "MAE": 0.6709,
+      "RMSE": 1.8279,
+      "MAPE": 69.32,
+      "PCC": 0.6498,
+      "R2": 0.422
+    },
+    "normal": {
+      "count": 5363,
+      "MAE": 0.7423,
+      "RMSE": 1.9491,
+      "MAPE": 59.93,
+      "PCC": 0.7809,
+      "R2": 0.5631
+    }
+  }
+}

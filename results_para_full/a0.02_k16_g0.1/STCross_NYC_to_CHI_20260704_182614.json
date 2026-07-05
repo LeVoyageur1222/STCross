@@ -1,0 +1,38 @@
+{
+  "model": "STCross",
+  "source_city": "NYC",
+  "target_city": "CHI",
+  "history_len": 12,
+  "predict_len": 12,
+  "train_steps": 15336,
+  "val_steps": 5160,
+  "test_steps": 5784,
+  "anomaly_min_ratio": 0.5,
+  "num_test_samples": 5761,
+  "subsets": {
+    "full": {
+      "count": 5761,
+      "MAE": 0.7092,
+      "RMSE": 1.8796,
+      "MAPE": 62.25,
+      "PCC": 0.782,
+      "R2": 0.5843
+    },
+    "anomaly": {
+      "count": 398,
+      "MAE": 0.6398,
+      "RMSE": 1.7659,
+      "MAPE": 70.84,
+      "PCC": 0.679,
+      "R2": 0.4605
+    },
+    "normal": {
+      "count": 5363,
+      "MAE": 0.7143,
+      "RMSE": 1.8878,
+      "MAPE": 61.75,
+      "PCC": 0.788,
+      "R2": 0.5902
+    }
+  }
+}
