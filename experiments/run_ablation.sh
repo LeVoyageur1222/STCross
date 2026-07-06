@@ -1,6 +1,6 @@
 #!/bin/bash
 # Ablation experiments for STCross
-# Optimal params from sensitivity: alpha=0.05, K=16, gamma=0.1
+# Optimal params from grid search: alpha=0.3, K=8, gamma=0.1
 # Runs: main (control) + 4 ablation variants × 2 settings (NYC→NYC + NYC→CHI) = 10 runs
 # Results saved to: results_ablation/
 #
@@ -14,9 +14,9 @@ cd "$(dirname "$0")/.."
 
 OUTPUT_DIR="results_ablation"
 
-# Optimal parameters from sensitivity analysis
-K=16
-ALPHA=0.05
+# Optimal parameters from grid search (results_para_full)
+K=8
+ALPHA=0.3
 GAMMA=0.1
 BETA=0.01
 
