@@ -110,7 +110,7 @@ def main():
     if lower_better:
         combos.sort(key=lambda c: c["avgs"].get(args.metric, float("inf")))
     else:
-        combos.sort(key=lambda c: -(c["avgs"].get(args.metric, -float("inf")))
+        combos.sort(key=lambda c: -(c["avgs"].get(args.metric, -float("inf"))))
 
     # Print top 20 and bottom 5
     print(f"\n{'='*100}")
