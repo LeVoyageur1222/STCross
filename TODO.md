@@ -3,7 +3,7 @@
 > 本文件为 STCross 项目的实验主规划，所有后续实验开发均以此为准。
 > 相关文档：[运行指南](RUN_GUIDE.md) | [结果汇总](results/RESULTS.md)
 >
-> 最后更新：2026-06-29（全量 baseline 实验完成，结果已录入 RESULTS.md）
+> 最后更新：2026-07-06（超参数敏感性改为网格搜索口径 + 消融实验完成并出图）
 
 ---
 
@@ -499,26 +499,29 @@
 - [x] 新增 `use_proto` / `use_city_branch` 构造参数（支持消融变体 A1-A4）
 - [x] 冒烟测试 8 项全通过（logvar/std_threshold/全模型/A2/A3/A4/encode/decomposition）
 
-### 5.4 参数敏感性实验 ✅ 已完成
+### 5.4 参数敏感性实验 ✅ 已完成（实验 + 分析 + 可视化）
 
-> 最优参数组合：α=0.05, K=16, γ=0.1
-> 实际搜索范围：α ∈ {0, 0.001, 0.01, 0.05, 0.1, 0.5}，K ∈ {4, 8, 16, 32}，γ ∈ {0.01, 0.1, 0.3, 0.5}
-> 结果保存在 `results_para/`（step1_alpha/, step2_K/, step3_gamma/）
+> **最终最优参数组合（网格搜索）：α=0.3, K=8, γ=0.1, β=0.01**
+> 该组合即消融实验与主结果采用的操作点；在 anomaly 子集上对三个参数的所有指标同时为曲线最优点。
+> 网格范围：α ∈ {0.02, 0.05, 0.1, 0.3}，K ∈ {4, 8, 16, 32}，γ ∈ {0.05, 0.1, 0.2, 0.4}（共 64 组）
+> 结果保存在 `results_para_full/`（每组合 4 个跨/同城设置 JSON）
 
-- [x] Step 1: α 搜索 — 结果在 `results_para/step1_alpha/alpha_{val}/`
-- [x] Step 2: K 搜索（在 α* 上） — 结果在 `results_para/step2_K/K_{val}/`
-- [x] Step 3: γ 搜索（在 α*, K* 上） — 结果在 `results_para/step3_gamma/gamma_{val}/`
-- [x] 趋势分析：RMSE 和 R² 在 α 上两方向都满足"先变好再变差"（峰值在 α=0.05）
-- [x] 可视化：6 张折线图已生成（`results_para/sensitivity_{param}_{metric}.png`）
-  - 脚本：`visualization/plot_sensitivity.py`
-  - broken y-axis + Times New Roman + 2位小数 + ~4:3 比例
-  - 指标：RMSE 和 R² × 3 参数 × 2 跨城方向 = 6 张图
+- [x] 全网格搜索：64 组合 × 4 设置，结果在 `results_para_full/a{α}_k{K}_g{γ}/`
+- [x] 最优组合确定：α=0.3, K=8, γ=0.1（跨城 anomaly MAE 最低，PCC/R² 最高）
+- [x] 分析脚本：`experiments/analyze_grid.py`（网格结果汇总 + 最优组合定位）
+- [x] 可视化：12 张折线图已生成（`results_para_full/grid_sensitivity_{param}_{metric}.png`）
+  - 脚本：`visualization/plot_grid_sensitivity.py`
+  - 3 参数（α/K/γ）× 4 指标（MAE/RMSE/PCC/R²）= 12 张图
+  - 每条曲线固定其他两参数于最优值，扫第三个参数；红色五角星标注最优点
+  - anomaly 子集，NYC→CHI；Times New Roman + 2 位小数 + 300 dpi
+- [x] 结论：所选最优配置在三个参数的所有指标上同时最优；STCross 对超参数选择鲁棒（合理范围内性能接近）
 
-**最优参数确定依据**：跨城 full MAE 平均值为主，辅以 PCC/R²。α=0.05 在 RMSE/R² 两方向都最优；K=16 在 CHI→NYC 4/5 指标最优；γ=0.1 在 NYC→CHI PCC/R² 最优。三个参数整体敏感性低（合理范围内性能接近），说明 STCross 对超参数选择鲁棒。
+> **历史说明（单轴敏感性，已废弃）**：早期单轴扫描（`results_para/step1-3/`，α=0.05/K=16/γ=0.1）及脚本 `plot_sensitivity.py` 已于 2026-07-06 删除，统一改为上述网格搜索口径。单轴口径的"α=0.05, K=16, γ=0.1"为旧结论，不再采用。
 
-### 5.5 消融实验（在最优参数 α=0.05, K=16, γ=0.1 上）
+### 5.5 消融实验 ✅ 已完成（实验 + 结果汇总 + 可视化）
 
-> 4 个变体 + 1 个对照（完整 STCross），每个跑 NYC→NYC + NYC→CHI = 10 次训练
+> 4 个变体 + 1 个对照（完整 STCross），在最优参数 **α=0.3, K=8, γ=0.1, β=0.01** 上
+> 每个变体跑 NYC→NYC + NYC→CHI = 10 次训练
 > 代码已就绪：`use_deviation_space` / `use_proto` / `use_city_branch` / `beta` 参数已支持
 > CLI 已支持：`--no_devspace` / `--no_proto` / `--no_city_branch` / `--stcross_beta`
 
@@ -533,22 +536,33 @@ bash experiments/run_ablation.sh
 
 | 子目录 | 变体 | 改动 | CLI flag |
 |--------|------|------|----------|
-| `control/` | 完整 STCross | 无（α=0.05, K=16, γ=0.1, β=0.01） | — |
+| `control/` | 完整 STCross | 无（α=0.3, K=8, γ=0.1, β=0.01） | — |
 | `A1_no_devspace/` | STCross_w/o DevSpace | 去偏差空间+归一化+L_cap（α=0） | `--no_devspace --stcross_alpha 0` |
 | `A2_no_proto/` | STCross_w/o ProtoBank | APB→FC | `--no_proto` |
 | `A3_no_citybranch/` | STCross_w/o CityBranch | 去CEnc+CAD+MIC | `--no_city_branch` |
 | `A4_no_mic/` | STCross_w/o MIC | β=0 | `--stcross_beta 0` |
 
-- [ ] **用户运行**：`bash experiments/run_ablation.sh`
-- [ ] 结果收集 → 更新 RESULTS.md（消融表格）
-- [ ] 分析各组件贡献
+- [x] **用户运行**：`bash experiments/run_ablation.sh`（control + A1-A4 全部完成）
+- [x] 结果收集 → `results_ablation/ablation_NYC_to_CHI.csv`（NYC→CHI，A1-A3 + Full，含 full/anomaly/normal 三子集，附 source 列溯源）
+- [x] 可视化 → `results_ablation/ablation_anomaly_{MAE,RMSE,PCC,R2}.png`（4 张独立柱状图，仅 anomaly 子集，Full 基线高亮 + Δ 标注）
+- [x] 分析各组件贡献（anomaly 口径，NYC→CHI）：
+  - A1（去偏差空间）退化最重：MAE +0.10，R² −0.09 → 偏差空间是核心创新
+  - A2（去原型库）退化最小：MAE +0.07，R² −0.04 → APB 贡献中等
+  - A3（去城市分支）R² 掉最多：R² −0.10 → CAD 城市调整主要提升异常方差解释力
+
+> **报告口径**：消融主表报告 NYC→CHI 的 anomaly 子集，保留 A1-A3 + Full STCross。Full STCross 行采用网格搜索最优组合结果（`results_para_full/a0.3_k8_g0.1`），与消融 control 同参数但不同种子；两者数值有 ~2% 训练波动，按一致性原则取网格口径。A4（去 MIC）已跑但未纳入主消融表，可作为附录补充。
+> **待办**：消融其余设置（CHI→NYC / 同城）的结果整理与论文表格排版。
 
 ### 5.6 可视化
 
-> 5 项，代码在 `visualization/` 目录
+> 代码在 `visualization/` 目录
 
-- [x] **V4: 参数敏感性曲线** — 6 张图已生成（`results_para/sensitivity_*.png`）
-- [ ] **V1: 偏差原型 pattern** — K=16 原型的 Δ̂_type 曲线（DIP 可解释性）
+- [x] **V4: 参数敏感性曲线** — 12 张图已生成（`results_para_full/grid_sensitivity_*.png`）
+  - 脚本：`visualization/plot_grid_sensitivity.py`（基于网格搜索，anomaly 子集，3 参数 × 4 指标）
+- [x] **V6: 消融柱状图** — 4 张图已生成（`results_ablation/ablation_anomaly_{MAE,RMSE,PCC,R2}.png`）
+  - 脚本：`visualization/plot_ablation.py`（仅 anomaly 子集，每指标独立一张图，Full 基线高亮 + Δ 标注）
+  - 数据源：`results_ablation/ablation_NYC_to_CHI.csv`
+- [ ] **V1: 偏差原型 pattern** — K=8 原型的 Δ̂_type 曲线（DIP 可解释性）
   - 代码：`model.apb.pattern.detach().numpy()`，直接取参数
 - [ ] **V2: Z_a/Z_s 城市不变性** — t-SNE（定性）+ domain classifier accuracy（定量）
   - 接口：`model.encode()` 已实现
@@ -566,15 +580,7 @@ bash experiments/run_ablation.sh
 - [ ] **F1: NBL 基线消融** — normal-only vs full HA → 基线纯度价值
 - [ ] **H1: 假设检验** — P(Δ|event) NYC vs CHI Wasserstein 距离 → 可迁移性假设（非训练）
 
-> 放入论文附录，不占正文篇幅
-
-- [ ] **F1: NBL 基线消融** — normal-only vs full HA → 基线纯度价值
-- [ ] **H1: 假设检验** — P(Δ|event) NYC vs CHI Wasserstein 距离 → 可迁移性假设（非训练）
-
-- [ ] `VariationalLSTM.forward` 加 `logvar.clamp(-10, 10)` 防 NaN
-- [ ] 新增 `model.encode()` 接口（提取 Z_a/Z_s，供 V2/V5）
-- [ ] 新增 `model.predict_with_decomposition()` 接口（返回分解预测，供 V3）
-- [ ] patience 分变体配置（A1=15, 其余=10）
+> 下列工程项已并入 5.3 工程预备完成：`logvar.clamp` 防 NaN、`model.encode()`、`model.predict_with_decomposition()`、patience 分变体配置（A1=15, 其余=10）。
 
 ---
 
@@ -584,10 +590,11 @@ bash experiments/run_ablation.sh
 
 ### 6.1 综合分析
 
-- [ ] 汇总消融实验结果（5.3）和参数敏感性结果（5.4）
-- [ ] 分析各组件贡献的量化结论
+- [x] 汇总消融实验结果（5.5）和参数敏感性结果（5.4）→ CSV + 图表已生成
+- [x] 分析各组件贡献的量化结论（消融 A1-A3，anomaly NYC→CHI）
 - [ ] 假设 H1 验证结论（P(Δ|event) 跨城分布距离）
 - [ ] 公平性对照实验结论
+- [ ] 消融其余设置（CHI→NYC / 同城）结果整理与对比
 
 ### 6.2 论文撰写
 
@@ -630,10 +637,12 @@ Phase 0 ✅
 - [x] **Phase 2**：~~已废弃~~ — STGCN/DCRNN/GWNET/STGODE 因跨城市 N 不匹配从 registry 移除（2026-06-25 验证）
 - [x] **Phase 3**：TimeAlign ✅ / ProtoTS ✅ / ModernTCN ✅（全量评测完成，结果已录入 RESULTS.md）
 - [x] **Phase 4**：EVL ✅ / EALGAP ✅ / DAN ✅ / ST-SSDL ✅（全量评测完成，结果已录入 RESULTS.md）
-- [x] **Phase 5**：5.1 模型设计 ✅ / 5.2 模型实现+全量实验 ✅ / 5.3-5.5 消融+敏感性+可视化（方案已设计，4+4+4=12项，待运行）
+- [x] **Phase 5**：5.1 模型设计 ✅ / 5.2 模型实现+全量实验 ✅ / 5.3 工程预备 ✅ / 5.4 参数敏感性（网格搜索，已完成+分析+可视化）✅ / 5.5 消融实验（已完成+CSV+柱状图）✅ / 5.6 可视化 V4+V6 已完成，V1/V2/V3/V5 待做
 - [ ] **Phase 6**：综合分析与论文撰写（待开始）
 
-> **全量实验完成**：12 个模型 × 4 设置 = 48 组实验。详见 `results/RESULTS.md`。
+> **全量实验完成**：12 个模型 × 4 设置 = 48 组主实验。详见 `results/RESULTS.md`。
+> **超参数敏感性**：网格搜索 64 组合，最优 α=0.3/K=8/γ=0.1，12 张图在 `results_para_full/`。
+> **消融实验**：control + A1-A4 已跑，NYC→CHI anomaly 口径汇总在 `results_ablation/ablation_NYC_to_CHI.csv` + 4 张柱状图。
 > **核心发现**：STCross 在所有设置全面领先，MAE 降低 9-11%，R² 提升 31-53%，迁移衰减最低（3.3%）。
 > **STCross 创新点**：DIP（偏差空间容量约束的可迁移原型）+ DDAC（偏差空间解耦与条件化）。
 

@@ -1,0 +1,13 @@
+variant,subset,MAE,RMSE,PCC,R2,source
+STCross (Full),full,0.6988,1.8742,0.7843,0.5867,results_para_full/a0.3_k8_g0.1
+STCross (Full),anomaly,0.6292,1.7539,0.6844,0.4679,results_para_full/a0.3_k8_g0.1
+STCross (Full),normal,0.7039,1.8828,0.7903,0.5923,results_para_full/a0.3_k8_g0.1
+A1: w/o Deviation Space,full,0.8536,2.3166,0.6258,0.3686,results_ablation/A1_no_devspace
+A1: w/o Deviation Space,anomaly,0.7325,1.9039,0.6132,0.3730,results_ablation/A1_no_devspace
+A1: w/o Deviation Space,normal,0.8626,2.3443,0.6269,0.3680,results_ablation/A1_no_devspace
+A2: w/o Prototype Bank,full,0.7604,1.9272,0.7694,0.5630,results_ablation/A2_no_proto
+A2: w/o Prototype Bank,anomaly,0.6949,1.8217,0.6537,0.4259,results_ablation/A2_no_proto
+A2: w/o Prototype Bank,normal,0.7653,1.9348,0.7762,0.5695,results_ablation/A2_no_proto
+A3: w/o City Branch,full,0.7507,2.0036,0.7595,0.5277,results_ablation/A3_no_citybranch
+A3: w/o City Branch,anomaly,0.6827,1.9097,0.6077,0.3692,results_ablation/A3_no_citybranch
+A3: w/o City Branch,normal,0.7558,2.0104,0.7684,0.5352,results_ablation/A3_no_citybranch
