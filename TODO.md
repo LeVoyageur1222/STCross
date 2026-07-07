@@ -562,16 +562,25 @@ bash experiments/run_ablation.sh
 - [x] **V6: 消融柱状图** — 4 张图已生成（`results_ablation/ablation_anomaly_{MAE,RMSE,PCC,R2}.png`）
   - 脚本：`visualization/plot_ablation.py`（仅 anomaly 子集，每指标独立一张图，Full 基线高亮 + Δ 标注）
   - 数据源：`results_ablation/ablation_NYC_to_CHI.csv`
-- [ ] **V1: 偏差原型 pattern** — K=8 原型的 Δ̂_type 曲线（DIP 可解释性）
-  - 代码：`model.apb.pattern.detach().numpy()`，直接取参数
-- [ ] **V2: Z_a/Z_s 城市不变性** — t-SNE（定性）+ domain classifier accuracy（定量）
-  - 接口：`model.encode()` 已实现
-  - 指标：Z_a 城市分类≈50%（不变）；Z_s>70%（特定）；raw Δ 上界>90%
-- [ ] **V3: 预测曲线 Case Study** — STCross vs DAN vs HA，标注 NBL/Δ̂_type/Δ̂_adj 分解
-  - 接口：`model.predict_with_decomposition()` 已实现
-- [ ] **V5: 反事实测试** — 交换 NYC/CHI 的 Z_s，验证类型不变幅度变
-  - 需新增：`model.predict_with_swapped_zs()` 接口（~25 行）
-  - 指标：Δ̂_type 余弦>0.95 且 Δ̂_adj L2 显著改变
+- [x] **V1: 偏差原型 pattern** — 8 原型 Δ̂_type 曲线 + 使用分布
+  - 脚本：`visualization/viz_v1_prototype_patterns.py`（取 `model.apb.pattern` 权重 + CHI 异常样本最近原型统计）
+  - 输出：`results_viz/v1_prototype_patterns.png`、`v1_prototype_usage.png`
+  - 运行：`python visualization/viz_v1_prototype_patterns.py`
+- [x] **V2: Z_a/Z_s 城市不变性** — t-SNE（定性）+ domain classifier accuracy（定量）
+  - 脚本：`visualization/viz_v2_city_invariance.py`（NYC+CHI encode → raw Δ/Z_a/Z_s 三表示域分类 + t-SNE）
+  - 接口：`model.encode()`；指标：raw Δ >90%（上界）、Z_a ≈50%（不变）、Z_s >70%（特定）
+  - 输出：`results_viz/v2_domain_accuracy.png`、`v2_tsne_za.png`、`v2_tsne_zs.png`
+  - 运行：`python visualization/viz_v2_city_invariance.py`
+- [x] **V3: 预测曲线 Case Study** — 节假日+天气各一区间，STCross 分解 vs 多 baseline
+  - 脚本：`visualization/viz_v3_prediction_case_study.py`（扫描异常 run，按 STCross 赢最多选区间，画滚动 1-step 曲线 + 分解图；支持多 baseline + 每 baseline 独立 checkpoint 路径）
+  - 接口：`model.predict_with_decomposition()`；输出：`results_viz/v3_case_study_{holiday,weather}.png` + 候选 MAE 表
+  - baseline 配置：脚本顶部 `BASELINE_CONFIG` 字典（name→ckpt_dir）；`--baselines NAME [NAME...]` 选子集，`--ckpt-dir NAME=PATH` 覆盖路径，`--no-ha` 关闭 HA 参考线
+  - 运行：`python visualization/viz_v3_prediction_case_study.py --baselines DAN EVL LSTM`
+- [x] **设计文档** — `doc/visualization_plan.md`（V1-V3 动机/方法/IO/预期/证伪条件/运行方式；V5 标注删除）
+- ~~**V5: 反事实测试**~~ — 已删除（需新增 `predict_with_swapped_zs()` 接口，本轮不做，后续按需开列）
+
+> **V1-V3 前置**：需先重训 viz checkpoint（现有 `checkpoints/STCross_NYC_best.pt` 是 α=0.01 主结果那次；网格/消融的 α=0.3 最优 checkpoint 未保存）。运行 `python experiments/retrain_for_viz.py` 重训 STCross(α=0.3/K=8/γ=0.1/β=0.01) + DAN 到 `checkpoints_viz/`（约 20-40min，仅 NYC source，不覆盖主结果 checkpoint）。V1-V3 脚本只加载不训练。
+> **实现状态**：代码与设计文档已完成，待上服务器运行验证（运行由用户执行）。
 
 ### 5.7 附录补充实验
 
@@ -637,7 +646,7 @@ Phase 0 ✅
 - [x] **Phase 2**：~~已废弃~~ — STGCN/DCRNN/GWNET/STGODE 因跨城市 N 不匹配从 registry 移除（2026-06-25 验证）
 - [x] **Phase 3**：TimeAlign ✅ / ProtoTS ✅ / ModernTCN ✅（全量评测完成，结果已录入 RESULTS.md）
 - [x] **Phase 4**：EVL ✅ / EALGAP ✅ / DAN ✅ / ST-SSDL ✅（全量评测完成，结果已录入 RESULTS.md）
-- [x] **Phase 5**：5.1 模型设计 ✅ / 5.2 模型实现+全量实验 ✅ / 5.3 工程预备 ✅ / 5.4 参数敏感性（网格搜索，已完成+分析+可视化）✅ / 5.5 消融实验（已完成+CSV+柱状图）✅ / 5.6 可视化 V4+V6 已完成，V1/V2/V3/V5 待做
+- [x] **Phase 5**：5.1 模型设计 ✅ / 5.2 模型实现+全量实验 ✅ / 5.3 工程预备 ✅ / 5.4 参数敏感性（网格搜索，已完成+分析+可视化）✅ / 5.5 消融实验（已完成+CSV+柱状图）✅ / 5.6 可视化 V4+V6 已完成，V1/V2/V3 代码+设计文档已完成（待上服务器运行验证），V5 已删除
 - [ ] **Phase 6**：综合分析与论文撰写（待开始）
 
 > **全量实验完成**：12 个模型 × 4 设置 = 48 组主实验。详见 `results/RESULTS.md`。
