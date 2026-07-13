@@ -17,6 +17,7 @@ checkpoints_save/
 *.pt
 *.pth
 *.ckpt
+*.zip
 
 # Python相关
 __pycache__/
