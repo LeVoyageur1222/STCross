@@ -145,10 +145,30 @@ BASELINE_CONFIG = {
 
 ---
 
-## 5. 运行方式（汇总）
+## 5. 运行流程（详细）
+
+### 5.0 环境前置
+
+- **Python ≥ 3.9**（项目实测 3.10/3.12 均可）。
+- 依赖：`torch numpy pandas scipy tqdm einops scikit-learn`。V2 用 `sklearn.manifold.TSNE` + `sklearn.linear_model.LogisticRegression`（已验证 sklearn 1.7.2 可用）。安装：`pip install -r requirements.txt && pip install scikit-learn`。
+- **必须从项目根目录运行**：所有路径（`checkpoints/`、`checkpoints_viz/`、`data/processed_data/`、`results_viz/`）均相对项目根。所有脚本已内置 `sys.path.insert(0, 项目根)`，**无需设 `PYTHONPATH`**，直接 `python xxx.py` 即可。
+- 数据：`data/processed_data/` 下 NYC/CHI 的 flow/holiday/weather mask 必须已生成（项目已就绪）。
+
+### 5.1 步骤（项目根目录执行）
+
+| 步骤 | 命令 | 产物 | 耗时 | 依赖 |
+|---|---|---|---|---|
+| 0 前置 | `python experiments/retrain_for_viz.py` | `checkpoints_viz/STCross_NYC_best.pt` + `DAN_NYC_best.pt` | 20-40min | 仅一次 |
+| 1 V1 | `python visualization/viz_v1_prototype_patterns.py` | `results_viz/v1_prototype_patterns.png` + `v1_prototype_usage.png` | 秒级 | 步骤 0 |
+| 2 V2 | `python visualization/viz_v2_city_invariance.py` | `results_viz/v2_domain_accuracy.png` + `v2_tsne_za.png` + `v2_tsne_zs.png` | 分钟级 | 步骤 0 |
+| 3 V3 | `python visualization/viz_v3_prediction_case_study.py --baselines DAN EVL` | `results_viz/v3_case_study_{holiday,weather}.png` + MAE 表 | 分钟级 | 步骤 0 |
+
+> 步骤 1-3 互相独立，只依赖步骤 0（retrain 生成的 checkpoint），可任意顺序跑。
+
+### 5.2 命令示例
 
 ```bash
-# 0. 前置：重训 viz checkpoint（STCross α=0.3 + DAN，约 20-40min，仅一次）
+# 0. 重训 viz checkpoint（α=0.3 最优 STCross + DAN，仅 NYC source，不覆盖主结果）
 python experiments/retrain_for_viz.py
 
 # 1. V1 偏差原型 pattern
@@ -157,17 +177,34 @@ python visualization/viz_v1_prototype_patterns.py
 # 2. V2 Z_a/Z_s 城市不变性
 python visualization/viz_v2_city_invariance.py
 
-# 3. V3 预测曲线 case study（默认 DAN 基线；可多选）
+# 3. V3 预测曲线 case study
+#   默认单 baseline（DAN）
 python visualization/viz_v3_prediction_case_study.py --baselines DAN
-#   多 baseline 对比：
+#   多 baseline 对比
 python visualization/viz_v3_prediction_case_study.py --baselines DAN EVL LSTM DLinear PatchTST
-#   覆盖某 baseline 的 checkpoint 路径（可重复）：
+#   覆盖某 baseline 的 checkpoint 路径（可重复）
 python visualization/viz_v3_prediction_case_study.py --baselines DAN EVL --ckpt-dir DAN=checkpoints --ckpt-dir EVL=checkpoints
-#   关闭 HA 参考线：
+#   关闭 HA 参考线
 python visualization/viz_v3_prediction_case_study.py --baselines DAN --no-ha
 ```
 
 所有输出到 `results_viz/`。
+
+### 5.3 检查点（自验）
+
+- 步骤 0 后：`ls checkpoints_viz/` 应有 `STCross_NYC_best.pt` + `DAN_NYC_best.pt`；可 `python -c "import torch; sd=torch.load('checkpoints_viz/STCross_NYC_best.pt',map_location='cpu',weights_only=True); print(sd['apb.embed'].shape)"` 确认 `apb.embed` shape=(8,64)（结构正确）。
+- 步骤 1-3：确认 `results_viz/` 下对应 PNG 已生成。
+
+### 5.4 故障排查
+
+| 报错 | 原因 / 修复 |
+|---|---|
+| `ModuleNotFoundError: No module named 'eval'` | 未从项目根运行，或脚本缺 `sys.path.insert`。已修复（所有 viz/retrain 脚本均内置）。确认 cwd=项目根。 |
+| `FileNotFoundError: ... STCross_NYC_best.pt` | 步骤 0（retrain）未跑。先跑 `python experiments/retrain_for_viz.py`。 |
+| `FileNotFoundError: ... DAN_NYC_best.pt` | V3 用 DAN 但 retrain 未生成，或 DAN 在别的目录。用 `--ckpt-dir DAN=<dir>` 指向，或 `--baselines` 去掉 DAN。 |
+| V2 `AssertionError: Z_s is None` | 加载的 STCross checkpoint 是 `use_city_branch=False` 变体。确认用步骤 0 的完整 STCross checkpoint。 |
+| V3 区间选不出 / STCross 不赢 | 命令行会打印全候选 MAE 表，人工核查；可换 `--baselines` 子集或换区间（修改 `find_runs` 的 `MIN_RUN`）。 |
+| 训练 OOM / 慢 | retrain 用默认 `batch_size=64`；CPU 较慢（~20-40min）。有 GPU 自动用。 |
 
 ---
 

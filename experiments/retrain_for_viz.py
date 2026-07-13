@@ -10,6 +10,10 @@ Prerequisite for visualization/viz_v*.py. Run once:
 """
 
 import os
+import sys
+
+# Ensure project root is importable when run as `python experiments/retrain_for_viz.py`
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from eval.config import EvalConfig
 from eval.evaluator import Evaluator
