@@ -15,7 +15,7 @@ where STCross wins most over the strongest baseline, then plots per interval:
 Which baselines and their checkpoint dirs are configured in BASELINE_CONFIG
 below. Edit that dict to add/relocate a baseline. From the CLI:
 
-  --baselines NAME [NAME ...]      which baselines to compare (default: DAN)
+  --baselines NAME [NAME ...]      which baselines to compare (default: LSTM+ModernTCN+DAN)
   --ckpt-dir NAME=PATH             override checkpoint dir for one baseline
                                    (repeatable, e.g. --ckpt-dir DAN=checkpoints)
 
@@ -23,11 +23,11 @@ HA is always included as the NBL reference (non-parametric, no checkpoint).
 STCross always loads from checkpoints_viz/ (retrain_for_viz.py output).
 
 Usage:
-    python visualization/viz_v3_prediction_case_study.py                       # default: DAN
-    python visualization/viz_v3_prediction_case_study.py --baselines DAN EVL    # two baselines
-    python visualization/viz_v3_prediction_case_study.py --baselines DAN EVL LSTM DLinear PatchTST
+    python visualization/viz_v3_prediction_case_study.py                       # default: LSTM+ModernTCN+DAN
+    python visualization/viz_v3_prediction_case_study.py --baselines DAN EVL     # pick a subset
+    python visualization/viz_v3_prediction_case_study.py --baselines LSTM ModernTCN DAN DLinear PatchTST EVL
     python visualization/viz_v3_prediction_case_study.py --baselines DAN --ckpt-dir DAN=checkpoints
-    python visualization/viz_v3_prediction_case_study.py --no-ha               # drop HA ref line
+    python visualization/viz_v3_prediction_case_study.py --no-ha                 # drop HA ref line
 """
 
 import argparse
@@ -64,19 +64,30 @@ MIN_RUN = 6              # min consecutive anomaly hours to consider an interval
 # ---------------------------------------------------------------------------
 # Map baseline name -> checkpoint dir. All entries must be per_node models that
 # load via TorchModel.load_checkpoint("NYC"). HA is handled separately (no ckpt).
+#
+# Default baselines = best-per-category (from results/RESULTS.md, NYC→CHI full):
+#   Group A (时序):     LSTM       MAE 0.8832, R² 0.3686  (checkpoints/, reused)
+#   Group C (分布鲁棒): ModernTCN  MAE 0.8670, R² 0.3773  (checkpoints_viz/, retrained)
+#   Group D (极端事件): DAN        MAE 0.8718, R² 0.3720  (checkpoints_viz/, retrained)
 # To add a new baseline: register it in model/registry.py, then add an entry here.
 BASELINE_CONFIG = {
-    "DAN":      "checkpoints_viz",   # retrained by experiments/retrain_for_viz.py
-    "EVL":      "checkpoints",       # main-results checkpoint
-    "LSTM":     "checkpoints",
-    "DLinear":  "checkpoints",
-    "PatchTST": "checkpoints",
+    # best-per-category (default)
+    "LSTM":      "checkpoints",       # Group A best (reused main-results ckpt)
+    "ModernTCN": "checkpoints_viz",   # Group C best (retrained by retrain_for_viz.py)
+    "DAN":       "checkpoints_viz",   # Group D best (retrained by retrain_for_viz.py)
+    # other available baselines (pass via --baselines if wanted)
+    "EVL":       "checkpoints",       # Group D, has main-results ckpt
+    "DLinear":   "checkpoints",       # Group A, has main-results ckpt
+    "PatchTST":  "checkpoints",       # Group A, has main-results ckpt
 }
+
+# Default baseline set = best per category (override with --baselines)
+DEFAULT_BASELINES = ["LSTM", "ModernTCN", "DAN"]
 
 # Distinct colors for each learned baseline in the rolling-curve plot
 BASELINE_COLORS = {
-    "DAN": "#1f77b4", "EVL": "#2ca02c", "LSTM": "#9467bd",
-    "DLinear": "#8c564b", "PatchTST": "#e377c2",
+    "LSTM": "#1f77b4", "ModernTCN": "#2ca02c", "DAN": "#9467bd",
+    "EVL": "#ff7f0e", "DLinear": "#8c564b", "PatchTST": "#e377c2",
 }
 DEFAULT_COLOR = "#17becf"
 
@@ -345,9 +356,9 @@ def parse_overrides(overrides):
 def main():
     parser = argparse.ArgumentParser(
         description="V3 case study: STCross decomposition vs selected baselines")
-    parser.add_argument("--baselines", nargs="+", default=["DAN"],
-                        help="Learned baselines to compare (default: DAN). "
-                             "Options: " + ", ".join(BASELINE_CONFIG))
+    parser.add_argument("--baselines", nargs="+", default=DEFAULT_BASELINES,
+                        help="Learned baselines to compare (default: best-per-category "
+                             "LSTM+ModernTCN+DAN). Options: " + ", ".join(BASELINE_CONFIG))
     parser.add_argument("--ckpt-dir", action="append", default=[],
                         metavar="NAME=PATH",
                         help="Override checkpoint dir for a baseline "

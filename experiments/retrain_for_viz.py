@@ -1,9 +1,19 @@
-"""Retrain STCross (optimal α=0.3) + DAN on NYC source for visualization.
+"""Retrain models for visualization (NYC source, saved to checkpoints_viz/).
 
-Saves to checkpoints_viz/ to avoid clobbering main-results checkpoints
-(checkpoints/STCross_NYC_best.pt is the α=0.01 main-results run; keep it).
-Only trains NYC source (not all 4 settings) to save time — V1/V2/V3 only
-need the NYC-trained model applied to NYC (in-distribution) and CHI (cross-city).
+Trains:
+  - STCross (α=0.3, K=8, γ=0.1, β=0.01)        — the optimal config (no α=0.3 ckpt exists)
+  - Best-per-category baselines (from results/RESULTS.md, NYC→CHI full):
+      Group A (时序):     LSTM       MAE 0.8832, R² 0.3686  → reused, NOT retrained
+      Group C (分布鲁棒): ModernTCN  MAE 0.8670, R² 0.3773  → retrained here
+      Group D (极端事件): DAN        MAE 0.8718, R² 0.3720  → retrained here
+
+LSTM already has a main-results checkpoint (checkpoints/LSTM_NYC_best.pt) trained
+with the SAME protocol (seed=42, early_stop=10, CosineAnnealingLR) → reused as-is.
+Set RETRAIN_LSTM = True below to retrain it too (for full dir uniformity).
+
+Saved to checkpoints_viz/ to avoid clobbering main-results checkpoints/.
+Only trains NYC source (not all 4 settings) — V1/V2/V3 only need the NYC-trained
+model applied to NYC (in-distribution) and CHI (cross-city).
 
 Prerequisite for visualization/viz_v*.py. Run once:
     python experiments/retrain_for_viz.py
@@ -23,42 +33,45 @@ from train.trainer import TrainConfig, get_log_path, set_seed
 SEED = 42
 VIZ_CKPT_DIR = "checkpoints_viz"
 
+# Models to retrain (STCross always; ModernTCN + DAN lack checkpoints).
+# Each entry: name -> hparams dict (empty for standard per_node baselines).
+RETRAIN_LSTM = False  # LSTM already has a valid checkpoints/LSTM_NYC_best.pt
+
+MODELS_TO_TRAIN = [
+    ("STCross", dict(stcross_k=8, stcross_alpha=0.3, stcross_beta=0.01, stcross_gamma=0.1)),
+    ("ModernTCN", {}),   # Group C best
+    ("DAN", {}),         # Group D best
+]
+if RETRAIN_LSTM:
+    MODELS_TO_TRAIN.append(("LSTM", {}))
+
 
 def main():
     set_seed(SEED)
     os.makedirs(VIZ_CKPT_DIR, exist_ok=True)
 
-    # TrainConfig: checkpoint_dir isolated; early_stop_patience=10 matches
-    # the main-results / ablation training protocol.
     tc = TrainConfig(checkpoint_dir=VIZ_CKPT_DIR, early_stop_patience=10, seed=SEED)
     ec = EvalConfig(source_city="NYC", target_city="NYC")
     ev = Evaluator(ec)
 
-    # --- STCross with grid-search optimal params (α=0.3, K=8, γ=0.1, β=0.01) ---
-    print("=" * 60)
-    print("  Retrain STCross (α=0.3, K=8, γ=0.1, β=0.01) on NYC source")
-    print("=" * 60)
-    stcross_hparams = dict(
-        stcross_k=8, stcross_alpha=0.3, stcross_beta=0.01, stcross_gamma=0.1,
-    )
-    stcross = MODEL_REGISTRY["STCross"](ec, tc, **stcross_hparams)
-    ev.train(stcross, "NYC", log_path=get_log_path(tc, "STCross", "NYC"))
-    # Evaluator.train -> STCrossModel.fit -> saves checkpoints_viz/STCross_NYC_best.pt
-
-    # --- DAN (V3 baseline, design-doc default) ---
-    print("=" * 60)
-    print("  Retrain DAN on NYC source (V3 baseline)")
-    print("=" * 60)
-    dan = MODEL_REGISTRY["DAN"](ec, tc)
-    ev.train(dan, "NYC", log_path=get_log_path(tc, "DAN", "NYC"))
-    # -> checkpoints_viz/DAN_NYC_best.pt
+    for name, hparams in MODELS_TO_TRAIN:
+        print("\n" + "=" * 60)
+        print(f"  Retrain {name} on NYC source  |  -> {VIZ_CKPT_DIR}/{name}_NYC_best.pt")
+        if hparams:
+            print(f"  hparams: {hparams}")
+        print("=" * 60)
+        model = MODEL_REGISTRY[name](ec, tc, **hparams)
+        ev.train(model, "NYC", log_path=get_log_path(tc, name, "NYC"))
 
     print("\n" + "=" * 60)
     print(f"  Done. Visualization checkpoints in {VIZ_CKPT_DIR}/")
-    print(f"  - STCross_NYC_best.pt  (α=0.3, K=8, γ=0.1)")
-    print(f"  - DAN_NYC_best.pt")
+    for name, _ in MODELS_TO_TRAIN:
+        print(f"  - {name}_NYC_best.pt")
+    if not RETRAIN_LSTM:
+        print(f"  - LSTM_NYC_best.pt  (reused from checkpoints/, not retrained)")
     print("=" * 60)
-    print("\nNext: run visualization/viz_v{1,2,3}_*.py")
+    print("\nV3 default baselines: LSTM (checkpoints/) + ModernTCN + DAN (checkpoints_viz/) + HA (recomputed).")
+    print("Next: run visualization/viz_v{1,2,3}_*.py")
 
 
 if __name__ == "__main__":

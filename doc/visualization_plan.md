@@ -96,7 +96,11 @@ python experiments/retrain_for_viz.py
 - **天气**（mask 连续段 ≥6h）：2017-02-06(19h)、2017-07-21(12h) 及若干短时极端天气段。脚本自动扫描 `mask_CHI_holiday` 和 `mask_CHI_all`（weather）的连续 run（≥6h）。
 
 ### 方法
-1. 加载 STCross(α=0.3, `checkpoints_viz/`) + HA（CHI 上重算 lookup，无需 checkpoint，可 `--no-ha` 关闭）+ 一个或多个学习型 baseline（命令行 `--baselines NAME [NAME...]` 指定，默认 DAN）。
+1. 加载 STCross(α=0.3, `checkpoints_viz/`) + HA（CHI 上重算 lookup，无需 checkpoint，可 `--no-ha` 关闭）+ 一个或多个学习型 baseline（命令行 `--baselines NAME [NAME...]` 指定，**默认为三类最优：LSTM+ModernTCN+DAN**）。
+   - Group A（时序）最优 **LSTM**（`checkpoints/`，复用主结果 checkpoint）
+   - Group C（分布鲁棒）最优 **ModernTCN**（`checkpoints_viz/`，retrain 重训）
+   - Group D（极端事件）最优 **DAN**（`checkpoints_viz/`，retrain 重训）
+   - 最优依据：`results/RESULTS.md` NYC→CHI full 子集，按 R²+PCC 平衡口径（与项目自身分析一致）。ProtoTS/STSSDL 虽 anomaly MAE 更低但 R² 弱/不稳定，未选；可经 `--baselines` 手动加入对比。
 2. 对每个候选 run [r_start, r_end]：
    - 计算"滚动 1-step-ahead"样本范围 i ∈ [r_start−H, r_end−H]（夹到测试集有效样本），step-0 预测覆盖 [r_start, r_end]。
    - STCross `predict_with_decomposition` + 各 baseline `predict` + HA `predict_with_timestamps`，反标准化到原始尺度（HA 已是原始尺度）。
@@ -117,7 +121,7 @@ BASELINE_CONFIG = {
     "PatchTST": "checkpoints",
 }
 ```
-- **命令行选 baseline**：`--baselines DAN EVL LSTM`（可任意子集，默认 DAN）
+- **命令行选 baseline**：`--baselines NAME [NAME...]`（默认三类最优 LSTM+ModernTCN+DAN，可任意子集）
 - **命令行覆盖路径**：`--ckpt-dir NAME=PATH`（可重复，如 `--ckpt-dir DAN=checkpoints`）
 - **代码内加 baseline**：在 `model/registry.py` 注册后，往 `BASELINE_CONFIG` 加一行 `"NAME": "ckpt_dir"`
 - HA 始终作为 NBL 参考线（非参数化，无 checkpoint）；`--no-ha` 关闭
@@ -158,10 +162,10 @@ BASELINE_CONFIG = {
 
 | 步骤 | 命令 | 产物 | 耗时 | 依赖 |
 |---|---|---|---|---|
-| 0 前置 | `python experiments/retrain_for_viz.py` | `checkpoints_viz/STCross_NYC_best.pt` + `DAN_NYC_best.pt` | 20-40min | 仅一次 |
+| 0 前置 | `python experiments/retrain_for_viz.py` | `checkpoints_viz/{STCross,ModernTCN,DAN}_NYC_best.pt`（LSTM 复用 `checkpoints/`） | 30-60min | 仅一次 |
 | 1 V1 | `python visualization/viz_v1_prototype_patterns.py` | `results_viz/v1_prototype_patterns.png` + `v1_prototype_usage.png` | 秒级 | 步骤 0 |
 | 2 V2 | `python visualization/viz_v2_city_invariance.py` | `results_viz/v2_domain_accuracy.png` + `v2_tsne_za.png` + `v2_tsne_zs.png` | 分钟级 | 步骤 0 |
-| 3 V3 | `python visualization/viz_v3_prediction_case_study.py --baselines DAN EVL` | `results_viz/v3_case_study_{holiday,weather}.png` + MAE 表 | 分钟级 | 步骤 0 |
+| 3 V3 | `python visualization/viz_v3_prediction_case_study.py` | `results_viz/v3_case_study_{holiday,weather}.png` + MAE 表 | 分钟级 | 步骤 0 |
 
 > 步骤 1-3 互相独立，只依赖步骤 0（retrain 生成的 checkpoint），可任意顺序跑。
 
@@ -177,15 +181,15 @@ python visualization/viz_v1_prototype_patterns.py
 # 2. V2 Z_a/Z_s 城市不变性
 python visualization/viz_v2_city_invariance.py
 
-# 3. V3 预测曲线 case study
-#   默认单 baseline（DAN）
-python visualization/viz_v3_prediction_case_study.py --baselines DAN
-#   多 baseline 对比
-python visualization/viz_v3_prediction_case_study.py --baselines DAN EVL LSTM DLinear PatchTST
+# 3. V3 预测曲线 case study（默认三类最优 baseline：LSTM+ModernTCN+DAN）
+python visualization/viz_v3_prediction_case_study.py
+#   自选子集
+python visualization/viz_v3_prediction_case_study.py --baselines DAN EVL
+python visualization/viz_v3_prediction_case_study.py --baselines LSTM ModernTCN DAN DLinear PatchTST EVL
 #   覆盖某 baseline 的 checkpoint 路径（可重复）
 python visualization/viz_v3_prediction_case_study.py --baselines DAN EVL --ckpt-dir DAN=checkpoints --ckpt-dir EVL=checkpoints
 #   关闭 HA 参考线
-python visualization/viz_v3_prediction_case_study.py --baselines DAN --no-ha
+python visualization/viz_v3_prediction_case_study.py --no-ha
 ```
 
 所有输出到 `results_viz/`。
@@ -204,7 +208,7 @@ python visualization/viz_v3_prediction_case_study.py --baselines DAN --no-ha
 | `FileNotFoundError: ... DAN_NYC_best.pt` | V3 用 DAN 但 retrain 未生成，或 DAN 在别的目录。用 `--ckpt-dir DAN=<dir>` 指向，或 `--baselines` 去掉 DAN。 |
 | V2 `AssertionError: Z_s is None` | 加载的 STCross checkpoint 是 `use_city_branch=False` 变体。确认用步骤 0 的完整 STCross checkpoint。 |
 | V3 区间选不出 / STCross 不赢 | 命令行会打印全候选 MAE 表，人工核查；可换 `--baselines` 子集或换区间（修改 `find_runs` 的 `MIN_RUN`）。 |
-| 训练 OOM / 慢 | retrain 用默认 `batch_size=64`；CPU 较慢（~20-40min）。有 GPU 自动用。 |
+| 训练 OOM / 慢 | retrain 训练 3 个模型（STCross+ModernTCN+DAN），CPU 较慢（~30-60min）。有 GPU 自动用。 |
 
 ---
 

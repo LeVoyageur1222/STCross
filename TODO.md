@@ -569,9 +569,10 @@ bash experiments/run_ablation.sh
 > 下列三项**代码与脚本已写完，但尚未在服务器上运行验证**（retrain + V1/V2/V3 均未跑）。前置 retrain 脚本已修复路径 bug（`sys.path` 注入项目根，对齐 `run_all.py`）。
 
 - [ ] **前置：重训 viz checkpoint** — `experiments/retrain_for_viz.py`
-  - 作用：重训 STCross(α=0.3/K=8/γ=0.1/β=0.01) + DAN 到 `checkpoints_viz/`（仅 NYC source，不覆盖主结果 `checkpoints/`）。V1-V3 脚本只加载不训练。
-  - 状态：代码已写，已修复 `ModuleNotFoundError: No module named 'eval'`（补 `sys.path.insert`），**待运行**
-  - 运行：`python experiments/retrain_for_viz.py`（约 20-40min）
+  - 作用：重训 **3 个模型**到 `checkpoints_viz/`：STCross(α=0.3/K=8/γ=0.1/β=0.01) + ModernTCN + DAN。LSTM 复用现有 `checkpoints/LSTM_NYC_best.pt`（同训练协议，不重复训）。V1-V3 脚本只加载不训练。
+  - 三类最优 baseline（`results/RESULTS.md` NYC→CHI full）：A 类 LSTM(MAE 0.8832/R² 0.3686)、C 类 ModernTCN(0.8670/0.3773)、D 类 DAN(0.8718/0.3720)
+  - 状态：代码已写，已修复 `ModuleNotFoundError`（补 `sys.path.insert`），**待运行**
+  - 运行：`python experiments/retrain_for_viz.py`（约 30-60min，3 个 NYC 训练）
 - [ ] **V1: 偏差原型 pattern** — 8 原型 Δ̂_type 曲线 + 使用分布
   - 脚本：`visualization/viz_v1_prototype_patterns.py`（取 `model.apb.pattern` 权重 + CHI 异常样本最近原型统计）
   - 输出：`results_viz/v1_prototype_patterns.png`、`v1_prototype_usage.png`
@@ -586,9 +587,9 @@ bash experiments/run_ablation.sh
 - [ ] **V3: 预测曲线 Case Study** — 节假日+天气各一区间，STCross 分解 vs 多 baseline
   - 脚本：`visualization/viz_v3_prediction_case_study.py`（扫描异常 run，按 STCross 赢最多选区间，画滚动 1-step 曲线 + 分解图；支持多 baseline + 每 baseline 独立 checkpoint 路径）
   - 接口：`model.predict_with_decomposition()`；输出：`results_viz/v3_case_study_{holiday,weather}.png` + 候选 MAE 表
-  - baseline 配置：脚本顶部 `BASELINE_CONFIG` 字典（name→ckpt_dir）；`--baselines NAME [NAME...]` 选子集，`--ckpt-dir NAME=PATH` 覆盖路径，`--no-ha` 关闭 HA 参考线
+  - baseline 配置：脚本顶部 `BASELINE_CONFIG` 字典（name→ckpt_dir）；**默认三类最优 LSTM+ModernTCN+DAN**；`--baselines NAME [NAME...]` 选子集，`--ckpt-dir NAME=PATH` 覆盖路径，`--no-ha` 关闭 HA 参考线
   - 状态：代码已写，**待运行验证**
-  - 运行：`python visualization/viz_v3_prediction_case_study.py --baselines DAN EVL LSTM`
+  - 运行：`python visualization/viz_v3_prediction_case_study.py`（默认三类最优；可 `--baselines` 自选）
 - ~~**V5: 反事实测试**~~ — 已删除（需新增 `predict_with_swapped_zs()` 接口，本轮不做，后续按需开列）
 
 #### 可视化运行流程（详细）
@@ -600,10 +601,10 @@ bash experiments/run_ablation.sh
 - **必须从项目根目录运行**（所有路径 `checkpoints/`、`checkpoints_viz/`、`data/processed_data/`、`results_viz/` 均相对项目根）。所有脚本已内置 `sys.path.insert` 注入项目根，无需设 `PYTHONPATH`。
 
 **步骤**（在项目根目录执行）：
-1. `python experiments/retrain_for_viz.py` → 生成 `checkpoints_viz/STCross_NYC_best.pt` + `DAN_NYC_best.pt`（α=0.3 最优 checkpoint；约 20-40min，仅一次）。
+1. `python experiments/retrain_for_viz.py` → 生成 `checkpoints_viz/{STCross,ModernTCN,DAN}_NYC_best.pt`（α=0.3 STCross + 三类最优 baseline 中的 ModernTCN/DAN；LSTM 复用 `checkpoints/`；约 30-60min，仅一次）。
 2. `python visualization/viz_v1_prototype_patterns.py` → `results_viz/v1_*.png`（秒级，只取权重+encode）。
 3. `python visualization/viz_v2_city_invariance.py` → `results_viz/v2_*.png`（分钟级，encode 两城市+t-SNE）。
-4. `python visualization/viz_v3_prediction_case_study.py --baselines DAN EVL` → `results_viz/v3_case_study_{holiday,weather}.png`（分钟级，扫描异常 run+多模型推理）。
+4. `python visualization/viz_v3_prediction_case_study.py` → `results_viz/v3_case_study_{holiday,weather}.png`（分钟级，默认对比三类最优 LSTM+ModernTCN+DAN+HA；可 `--baselines` 自选）。
 
 **检查点**：
 - 步骤 1 后确认 `checkpoints_viz/STCross_NYC_best.pt` 存在且 `apb.embed` shape=(8,64)。
