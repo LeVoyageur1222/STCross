@@ -51,3 +51,5 @@ Thumbs.db
 .env
 venv/
 .env/
+
+.qoder
