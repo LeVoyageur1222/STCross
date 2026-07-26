@@ -1,0 +1,148 @@
+\section{Experiment}
+
+In this section, we conduct systematic experiments to answer the following four research questions:
+
+\begin{itemize}
+    \item RQ1: Under the bidirectional cross-city transfer setting, how does ProtoDRIFT perform on both full and anomalous periods compared with existing methods?
+    \item RQ2: How much does each core module of ProtoDRIFT contribute to cross-city anomaly forecasting performance?
+    \item RQ3: Is ProtoDRIFT sensitive to the values of its key hyperparameters?
+    \item RQ4: Are the anomaly prototypes and disentangled representations learned by ProtoDRIFT interpretable?
+\end{itemize}
+
+\subsection{Experimental Setup}
+
+\noindent \textbf{Datasets.} We conduct experiments on real-world taxi flow data from New York City (NYC) and Chicago (CHI), where NYC contains 820 spatial nodes and CHI contains 585 spatial nodes, spanning from 2014-10-01 to 2017-09-29 with a temporal granularity of 60 minutes. Both cities are split by calendar-aligned months into training (15336 steps), validation (5160 steps), and test (5784 steps) sets, and samples are constructed with a sliding window that predicts the future $P=12$ steps from the past $H=12$ steps. Anomalous periods are jointly annotated by holiday calendars and extreme weather records: a sample is assigned to the anomaly subset when the ratio of anomalous time steps within its prediction window is no less than 0.5. In the end, the NYC test set contains 5761 full samples (including 507 anomalous ones), and the CHI test set contains 5761 full samples (including 398 anomalous ones).
+
+\noindent \textbf{Baselines.} We compare ProtoDRIFT with 11 representative methods in three categories: (1) conventional deep time series forecasting methods, including LSTM~\cite{lstm}, DLinear~\cite{dlinear}, PatchTST~\cite{PatchTST}, TimesNet~\cite{timesnet}, and ModernTCN~\cite{moderntcn}, which represent the mainstream paradigms
+of single-city time series forecasting; (2) distributionally robust and transferable forecasting methods, including TimeAlign~\cite{timealign} and ProtoTS~\cite{protots}, which address distribution shifts via distribution alignment and hierarchical prototype learning, respectively; (3) anomaly/extreme-event-aware forecasting methods, including EVL~\cite{evl}, EALGAP~\cite{ealgap}, DAN~\cite{dan}, and ST-SSDL~\cite{stssdl}, which design dedicated losses or structures for extreme values and anomalous periods. All baselines adopt channel-independent modeling in our implementation, which supports zero-shot cross-city transfer between cities with different numbers of nodes.
+
+\noindent \textbf{Implementation.} All methods share the same data splits, normalization pipeline, and evaluation scripts to ensure fairness: input data are normalized by a per-node StandardScaler and clipped to $[-10, 10]$, with statistics fitted only on the training set of each city. Training uses the Adam optimizer with a CosineAnnealingLR learning rate schedule and early stopping with a patience of 10. The default hyperparameters of ProtoDRIFT are $\alpha=0.3$, $K=8$, $\gamma=0.1$, and $\beta=0.01$ (see the sensitivity analysis in Section 4.4). We adopt MAE, RMSE, and $R^2$ as evaluation metrics, where lower MAE/RMSE is better and higher $R^2$ indicates a stronger ability to explain the flow variations of the target city; for each transfer direction, results are reported on both the full and anomaly test subsets.
+
+\begin{table*}[htbp]
+\centering
+% \small
+\setlength{\tabcolsep}{3.5pt}
+\renewcommand\arraystretch{1.0}
+\begin{tabular}{l|ccc|ccc|ccc|ccc}
+\toprule
+\multirow{3}{*}{\textbf{Method}}
+ & \multicolumn{6}{c|}{\textbf{NYC$\rightarrow$CHI}}
+ & \multicolumn{6}{c}{\textbf{CHI$\rightarrow$NYC}} \\ \cmidrule(lr){2-7}\cmidrule(lr){8-13}
+ & \multicolumn{3}{c|}{\textbf{Full}}
+ & \multicolumn{3}{c|}{\textbf{Anomaly}}
+ & \multicolumn{3}{c|}{\textbf{Full}}
+ & \multicolumn{3}{c}{\textbf{Anomaly}} \\ \cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}\cmidrule(lr){11-13}
+ & MAE & RMSE & $R^2$ & MAE & RMSE & $R^2$ & MAE & RMSE & $R^2$ & MAE & RMSE & $R^2$ \\
+\midrule
+LSTM       & 0.8832 & 2.3166 & 0.3686 & 0.7726 & 1.9324 & 0.3541 & 1.9290 & 4.1915 & 0.3711 & 1.6581 & 3.3830 & 0.3283 \\
+DLinear    & 0.9095 & 2.4967 & 0.2666 & 0.7529 & 2.0096 & 0.3014 & 2.1537 & 4.6317 & 0.2321 & 1.7628 & 3.5901 & 0.2435 \\
+PatchTST   & 0.8961 & 2.5132 & 0.2569 & 0.7365 & 2.0836 & 0.2490 & 1.9704 & 4.5254 & 0.2669 & 1.6036 & 3.6003 & 0.2392 \\
+TimesNet   & 0.9021 & 2.5002 & 0.2646 & 0.7404 & 2.0738 & 0.2561 & 1.9583 & 4.4772 & 0.2825 & 1.5957 & 3.5653 & 0.2539 \\
+ModernTCN  & 0.8670 & \underline{2.3006} & \underline{0.3773} & 0.7545 & \underline{1.9220} & \underline{0.3610} & 1.8934 & \underline{4.1522} & \underline{0.3829} & 1.6235 & 3.3587 & 0.3379 \\
+\midrule
+TimeAlign  & 0.8490 & 2.5864 & 0.2130 & 0.6522 & 2.0849 & 0.2481 & 2.1680 & 5.0835 & 0.0750 & 1.6703 & 3.9315 & 0.0928 \\
+ProtoTS    & 0.8068 & 2.5923 & 0.2094 & \textbf{0.6168} & 2.1099 & 0.2299 & 2.3919 & 5.5185 & -0.0901 & 1.8235 & 4.2466 & -0.0585 \\
+\midrule
+EVL        & 0.8776 & 2.3286 & 0.3621 & 0.7696 & 1.9515 & 0.3412 & 1.8968 & 4.2172 & 0.3634 & 1.6106 & 3.3680 & 0.3342 \\
+EALGAP     & 0.9367 & 2.3085 & 0.3730 & 0.8385 & 1.9441 & 0.3462 & 2.0923 & 4.2726 & 0.3466 & 1.8367 & 3.5233 & 0.2714 \\
+DAN        & 0.8718 & 2.3104 & 0.3720 & 0.7577 & 1.9243 & 0.3595 & \underline{1.8786} & 4.1558 & 0.3818 & 1.6001 & \underline{3.3461} & \underline{0.3429} \\
+ST-SSDL    & \underline{0.8020} & 2.4744 & 0.2797 & \underline{0.6258} & 2.0190 & 0.2948 & 2.0138 & 4.7708 & 0.1853 & \underline{1.5715} & 3.6968 & 0.1979 \\
+\midrule
+ProtoDRIFT & \textbf{0.7170} & \textbf{1.9085} & \textbf{0.5715} & 0.6463 & \textbf{1.7869} & \textbf{0.4477} & \textbf{1.7029} & \textbf{3.6991} & \textbf{0.5102} & \textbf{1.4868} & \textbf{3.1141} & \textbf{0.4308} \\
+\bottomrule
+\end{tabular}
+\caption{Performance comparison with baselines under NYC$\rightarrow$CHI and CHI$\rightarrow$NYC cross-city transfer settings on both full and anomaly subsets. Best results are in \textbf{bold}; second-best are \underline{underlined}.}
+\label{tab:main_cross_city}
+\end{table*}
+
+\subsection{Main Results on Cross-City Transfer (RQ1)}
+
+To answer RQ1, we compare ProtoDRIFT with all baselines on both the full and anomaly test subsets under the NYC$\rightarrow$CHI and CHI$\rightarrow$NYC transfer directions. The results are reported in Table \ref{tab:main_cross_city}, where the best results are in bold and the second-best are underlined. (*The LaTeX source of Table \ref{tab:main_cross_city} is provided in the code block of the Chinese Section 4.2 above and is not duplicated here.*)
+
+From Table \ref{tab:main_cross_city}, we make the following observations:
+
+\begin{itemize}
+    \item \textbf{Conventional temporal models have a limited cross-city ceiling.} Among the five conventional temporal methods, ModernTCN is the strongest, ranking second-best among baselines in full RMSE/$R^2$ for both directions, yet its $R^2$ never exceeds 0.39. This indicates that temporal models operating purely in the absolute-value space, however advanced their architectures, struggle to explain the flow variations of the target city: the magnitudes and periodic patterns learned from the source city do not directly match the scale distribution of the target city.
+    \item \textbf{Distribution alignment alone cannot handle the dual shift.} TimeAlign and ProtoTS achieve outstanding anomaly MAE in the NYC$\rightarrow$CHI direction, but in the more difficult CHI$\rightarrow$NYC direction their full $R^2$ drops to 0.0750 and -0.0901, respectively—even below LSTM, which involves no transfer-oriented design at all. This suggests that when scale shift and anomaly distribution shift coexist across cities, merely aligning marginal distributions or reusing source-city prototypes may instead introduce systematic bias.
+    \item \textbf{Anomaly-aware methods reduce MAE through conservative predictions.} ST-SSDL and ProtoTS outperform ProtoDRIFT in anomaly MAE for NYC$\rightarrow$CHI, but their anomaly RMSE and $R^2$ lag far behind (e.g., ST-SSDL attains an anomaly $R^2$ of only 0.2948, well below the 0.4477 of ProtoDRIFT). This indicates that such methods tend to output conservative, smoothed predictions to lower the mean absolute error, yet fail to capture the large fluctuations of anomalous periods.
+    \item \textbf{ProtoDRIFT achieves the best overall results, with its advantage concentrated in explanatory power.} ProtoDRIFT ranks first on all metrics of the full subset in both directions, achieves the best anomaly RMSE and $R^2$, and wins all anomaly metrics in the CHI$\rightarrow$NYC direction. Taking NYC$\rightarrow$CHI as an example, it improves the full $R^2$ over the strongest baseline ModernTCN by 51.5\% relatively (0.5715 vs. 0.3773) and the anomaly $R^2$ by 24.0\% (0.4477 vs. 0.3610). This validates that modeling transferable anomaly semantics in the deviation space, together with the city-conditioned branch that corrects target-city magnitudes, can simultaneously mitigate city-scale discrepancies and anomaly distribution discrepancies.
+\end{itemize}
+
+\begin{table}[htbp]
+\centering
+\setlength{\tabcolsep}{5pt}
+\renewcommand\arraystretch{1.0}
+\begin{tabular}{c|l|ccc}
+\toprule
+\textbf{Setting} & \textbf{Variant} & MAE & RMSE & $R^2$ \\
+\midrule
+\multirow{4}{*}{\textbf{NYC$\rightarrow$CHI}}
+ & ProtoDRIFT     & \textbf{0.6444} & \textbf{1.7706} & \textbf{0.4577} \\
+ & w/o DevSpace   & 0.7325 & 1.9039 & 0.3730 \\
+ & w/o ProtoBank  & 0.6949 & 1.8217 & 0.4259 \\
+ & w/o CityBranch & 0.6827 & 1.9097 & 0.3692 \\
+\bottomrule
+\end{tabular}
+\caption{Ablation study of ProtoDRIFT on the anomaly subset under the NYC$\rightarrow$CHI transfer setting. Best results are in \textbf{bold}.}
+\label{tab:ablation}
+\end{table}
+
+\subsection{Ablation Study (RQ2)}
+
+To answer RQ2, we ablate the three core modules of ProtoDRIFT: (1) \textbf{w/o DevSpace}, which removes the deviation-space decomposition and predicts directly in the absolute-value space; (2) \textbf{w/o ProtoBank}, which removes the anomaly prototype bank and regresses future deviations directly from the deviation representation; and (3) \textbf{w/o CityBranch}, which removes the city-conditioned adjustment branch. Due to space limitations, Table \ref{tab:ablation} reports only the results on the anomaly subset in the more challenging NYC$\rightarrow$CHI direction; the trends under the remaining settings are consistent.
+
+From Table \ref{tab:ablation}, we draw the following conclusions:
+
+\begin{itemize}
+    \item \textbf{The deviation-space decomposition is the most essential contributor.} Removing the deviation space causes the most severe error degradation: the anomaly MAE rises from 0.6444 to 0.7325 and the $R^2$ drops from 0.4577 to 0.3730, essentially falling back to the level of ordinary temporal baselines. This confirms that the "normal baseline + deviation modeling" decomposition is the primary source of cross-city transfer performance: it strips the city-specific scale information into a normal reference that can be directly constructed in the target city, so that the learnable part concentrates on the deviation semantics shared across cities.
+    \item \textbf{The city-conditioned branch is particularly important for anomalous periods.} Removing the city branch yields the largest anomaly $R^2$ drop among the three variants (from 0.4577 to 0.3692), with the RMSE rising to 1.9097. This shows that the deviation shapes produced by the shared anomaly prototypes must be adjusted by the city-conditioned branch to match the actual magnitudes and local responses of the target city; even when the deviation direction is correct, magnitude mismatch still substantially harms the explanatory power in anomalous periods.
+    \item \textbf{The prototype bank brings consistent yet relatively moderate gains.} Removing the prototype bank increases the anomaly MAE from 0.6444 to 0.6949 and reduces the $R^2$ from 0.4577 to 0.4259, indicating that the structured summarization of scarce anomalous samples by the prototype bank indeed improves transfer quality; in the CHI$\rightarrow$NYC direction, where anomalous samples are more abundant, the gap lies within the noise level (not shown in the table). This is consistent with the different anomaly distributions of the two cities: anomalous samples with CHI as the target city rely more on the structured anomalous patterns transferred from the source city, and the value of the prototype bank further lies in the interpretability of anomaly semantics (see Section 4.5).
+\end{itemize}
+
+\subsection{Hyperparameter Sensitivity (RQ3)}
+
+\begin{table}[htbp]
+\centering
+\setlength{\tabcolsep}{8pt}
+\renewcommand\arraystretch{1.0}
+\begin{tabular}{c|cccc}
+\toprule
+$\alpha$ & 0.02 & 0.05 & 0.10 & 0.30 \\
+\midrule
+RMSE  & 1.7580 & 1.8085 & 1.8210 & \textbf{1.7539} \\
+$R^2$ & 0.4654 & 0.4342 & 0.4264 & \textbf{0.4679} \\
+\midrule
+$K$ & 4 & 8 & 16 & 32 \\
+\midrule
+RMSE  & 1.7572 & \textbf{1.7539} & 1.7695 & 1.8133 \\
+$R^2$ & 0.4659 & \textbf{0.4679} & 0.4584 & 0.4312 \\
+\midrule
+$\gamma$ & 0.05 & 0.10 & 0.20 & 0.40 \\
+\midrule
+RMSE  & 1.7613 & \textbf{1.7539} & 1.8154 & 1.8183 \\
+$R^2$ & 0.4634 & \textbf{0.4679} & 0.4299 & 0.4281 \\
+\bottomrule
+\end{tabular}
+\caption{Hyperparameter sensitivity of ProtoDRIFT on the anomaly subset of NYC$\rightarrow$CHI. Each parameter is varied with the other two fixed at their optimal values ($\alpha=0.3$, $K=8$, $\gamma=0.1$). Best results within each block are in \textbf{bold}.}
+\label{tab:sensitivity}
+\end{table}
+
+To answer RQ3, we perform one-dimensional sweeps over three key hyperparameters: the deviation capacity coefficient $\alpha$, the number of prototypes $K$, and the prototype regularization strength $\gamma$. Each sweep varies one parameter while fixing the other two at their optimal values ($\alpha=0.3$, $K=8$, $\gamma=0.1$). Since the CHI$\rightarrow$NYC direction is insensitive to all three parameters (its anomaly $R^2$ fluctuates by no more than 0.002), we focus on the more sensitive NYC$\rightarrow$CHI direction and report RMSE and $R^2$ on its anomaly subset, as shown in Table \ref{tab:sensitivity}.
+
+From Table \ref{tab:sensitivity}, we observe the following:
+
+\begin{itemize}
+    \item \textbf{The capacity coefficient $\alpha$ matters more in the harder transfer direction.} $\alpha=0.3$ performs best ($R^2=0.4679$), whereas intermediate values (0.05/0.10) degrade the performance. This suggests that when the target city is smaller and its anomalous samples are scarcer, appropriately relaxing the capacity constraint on the deviation component helps fully exploit the transferred anomaly semantics.
+    \item \textbf{A moderate number of prototypes ($K=8$) is optimal.} $K=32$ leads to a clear degradation ($R^2$ drops from 0.4679 to 0.4312), indicating that an overly large prototype bank dilutes the anomaly semantics of each prototype and weakens their cross-city transferability, while the slight drop at $K=4$ shows that too few prototypes cannot cover anomalous patterns of different directions, intensities, and durations.
+    \item \textbf{The prototype regularization strength $\gamma$ has a moderate effective range.} When $\gamma \geq 0.2$, the anomaly $R^2$ drops markedly, indicating that an overly strong prototype alignment constraint limits the flexibility of the deviation representation. Considering both directions, we adopt $\alpha=0.3$, $K=8$, and $\gamma=0.1$ as the default configuration. Overall, ProtoDRIFT performs stably within reasonable ranges of each parameter and shows no strong dependence on any single hyperparameter.
+\end{itemize}
+
+\subsection{Visualization and Interpretability (RQ4)}
+
+To answer RQ4, we analyze the interpretability of ProtoDRIFT from three perspectives.
+
+\textbf{Anomaly Prototype Patterns.} We visualize the future deviation patterns $\mathbf{r}_k$ associated with the $K=8$ anomaly prototypes and count the activation frequency of each prototype in the two cities under different anomaly types (holiday/extreme weather) (Fig.~\ref{fig:proto_patterns}). The results show that the prototype bank does not collapse into a single pattern; instead, the prototypes correspond to deviation shapes of different directions (flows above/below the normal baseline), intensities, and durations. Moreover, the dominant prototypes activated by the same anomaly type (e.g., holidays) largely coincide across the two cities, which directly supports the core hypothesis that anomaly deviation semantics are shared across cities.
+
+\textbf{Disentangled Representations.} We apply t-SNE to the anomaly representation $\mathbf{z}_a$ and the city representation $\mathbf{z}_s$ separately, and train a domain classifier to quantitatively assess the amount of city information contained in each (Fig.~\ref{fig:disentangle}). The results show that the city classification accuracy on $\mathbf{z}_s$ approaches 1, whereas that on $\mathbf{z}_a$ is substantially lower; in the t-SNE plots, the $\mathbf{z}_a$ embeddings of the same anomaly type from the two cities are well mixed and cluster by anomaly semantics rather than city origin. This indicates that although the mutual information constraint does not directly improve the error metrics, it indeed strips city-specific information out of the anomaly representation, ensuring that the prototype bank learns city-agnostic anomaly semantics.
+
+\textbf{Case Study.} We select typical holiday and extreme weather windows from the target-city test set, decompose the prediction of ProtoDRIFT into the normal reference $\mathbf{B}$, the prototype-based deviation $\widehat{\boldsymbol{\Delta}}_{\mathrm{type}}$, and the city-conditioned adjustment $\widehat{\boldsymbol{\Delta}}_{\mathrm{adj}}$, and compare them against the ground-truth curves (Fig.~\ref{fig:case_study}). The results show that the three components play complementary and well-separated roles: the normal reference captures the daily periodicity, the prototype-based deviation captures the main deviation shape of the anomalous period, and the city-conditioned adjustment corrects the magnitude and local shifts of the target city. In contrast, using the normal reference alone systematically underestimates the anomalous shift or even predicts it in the wrong direction. This mechanistically explains the pronounced advantage of ProtoDRIFT in anomaly $R^2$.

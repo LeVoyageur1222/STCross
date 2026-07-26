@@ -1,0 +1,146 @@
+% The overall architecture of MAP-STAR. 该模型使用Heterogeneous Subgraph Sampler采样多视角的固定结构子图。Phase 1在源城市上进行预训练，利用 Multi-View Pattern-Bank Adapter捕获一般性的地理邻接、人口流动与属性依赖等结构模式。Phase 2基于语义充足的Pattern Bank实现目标城市下游任务的预测。
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig/model_all_v4.png} % Reduce the figure size so that it is slightly narrower than the column.
+\caption{Overall architecture of MAP-STAR. The model first employs a Heterogeneous Subgraph Sampler to extract fixed-structure subgraphs from multiple views. Phase 1 conducts pre-training on the source city, where a Multi-View Pattern-Bank Adapter learns generic structural patterns—spatial adjacency, human-mobility flows, and attribute dependencies. Phase 2 reuses the semantically enriched pattern bank to perform downstream prediction tasks in the target city.}
+\label{fig:overview}
+\end{figure*}
+
+\section{Methodology}
+
+This section presents MAP-STAR, Multi-view Pattern-bank Adaptation with heterogeneous Subgraph sampling for Transferable Area Representation, in detail.  As illustrated in Figure \ref{fig:overview}, MAP-STAR follows a transferable pre-training–fine-tuning paradigm and introduces two key components: the Heterogeneous Subgraph Sampler (HSS) and the Multi-View Pattern-Bank Adapter (MVPBA). To overcome the immobility of fixed graph structures in prior work, we shift representation learning from the entire city graph to transferable subgraphs.  The HSS constructs a heterogeneous regional subgraph for each central node by jointly considering geographic adjacency, origin–destination mobility flows, and functional similarity derived from POI attributes.  These subgraphs serve as the basis for subsequent message passing. To further capture spatial and mobility patterns that generalize across cities, the MVPBA maintains a multi-view pattern bank that encodes common structural and interaction motifs. During pre-training on a source city, the pattern bank is updated to store these motifs, and then during fine-tuning stage, the knowledge stored in these  motifs can be directly transferred to a target city.  As Figure \ref{fig:overview} shows, both HSS and MVPBA can be plugged into standard graph-learning backbones, offering a new solution to the long-standing challenge of transferring urban region representations across heterogeneous city graphs.
+
+\subsection{Heterogeneous Subgraph Sampler}
+
+Urban regions interact through geographic proximity, traffic flows, and functional similarity. Isolating this tri-view locality around each centre node is therefore critical for constructing transferable graphs. 
+To preserve the ability across diverse city layouts,
+our Heterogeneous Subgraph Sampler (HSS) forms a two-hop neighborhood by mixing the $K$ nearest neighbors selected independently from the geographic, flow, and POI views, and produces three parallel relation channels on the induced subgraph.
+
+Formally, let $\mathcal G^{\text{sub}}_{i}=\bigl(\mathcal V^{\text{sub}}_{i},\mathcal E^{\text{sub}}_{i}\bigr)$ denote the heterogeneous subgraph of region $v_i$. Its node set $\mathcal V^{\text{sub}}_{i}$ is obtained by a two-hop, view-specific sampling process. (i)The geographic sampler chooses the $K_{\text{geo}}$ Euclidean nearest neighbours of $v_i$. (ii)~The flow sampler selects the $K_{\text{flow}}$ strongest OD interactors according to the OD matrix. (iii)~The POI sampler selects neighbours with the highest POI-distribution similarity. Each sampler first draws $k_1$ first-hop nodes and, for every such node, samples $k_2$ second-hop neighbours.
+
+On the induced subgraph we instantiate three relation-specific adjacency channels. For every ordered pair $(v_p,v_q)\in\mathcal V^{\text{sub}}_{i}\times\mathcal V^{\text{sub}}_{i}$ the edge weights are:
+\begin{equation}
+\label{eq:edge_weight}
+\begin{aligned}
+    E^{(r)}_{pq}=
+    \begin{cases}
+    1, &r=1\text{ (geo-adjacent)},\\
+    \bigl(\mathbf A^{\text{flow}}\bigr)_{pq},&r=2\text{ (flow intensity)},\\
+    \operatorname{sim}_{\text{poi}}(v_p,v_q),&r=3\text{ (POI similarity)},\\
+    0,&\text{otherwise},
+    \end{cases}
+\end{aligned}
+\end{equation}
+where $\mathbf A^{\text{flow}}$ is the OD‐flow matrix. The resulting heterogeneous subgraph is subsequently fed into the Multi-view Pattern-bank Subgraph Encoder, ensuring that fine-grained spatial structure and mobility dynamics are preserved for downstream cross-city region representation learning.
+
+\subsection{Patch Flow Encoder}
+
+Urban mobility series exhibit bursty short-term spikes as well as long-range seasonal rhythms; capturing both with minimal overhead is critical for transferable region embeddings. Drawing on recent progress in frequency-domain filtering and temporal convolutional networks (TCNs) \cite{TCN}, we devise a Patch-Flow Encoder. The encoder first applies a learnable FFT filter to each inflow patch and then refines the signal through a stack of dilated TCN blocks.
+
+Given an inflow patch $\mathbf X$, we perform an orthonormal real FFT, modulate it with a trainable complex mask, and transform the result back to the time domain:
+\begin{equation}
+\mathbf X^{\mathrm{ifft}}
+=\mathcal F_{\mathrm r}^{-1}\bigl(\mathcal F_{\mathrm r}(\mathbf X)\odot\mathbf w\bigr),
+\end{equation}
+where $\mathcal F_{\mathrm r}$ and $\mathcal F_{\mathrm r}^{-1}$ denote the real Fourier transform and its inverse, $\odot$ is element-wise complex multiplication, and $\mathbf w$ is a shared complex weight vector. This frequency modulation highlights both bursty and periodic components. The filtered sequence is then fed into $S$ dilated TCN residual blocks:
+\begin{equation}
+\mathbf H^{(s)}
+=\mathbf H^{(s-1)}+\sigma\bigl(\text{Conv1d}(\mathbf H^{(s-1)})\bigr),
+\end{equation}
+with $\mathbf H^{(0)}=\sigma(\mathbf W_{\text{in}}*\mathbf X^{\mathrm{ifft}})$. After the final block we apply mean pooling along the temporal axis to obtain the node-level flow embedding $\mathbf Z_{\text{flow}}=\mathrm{Mean}(\mathbf H^{(S)})$. This embedding is subsequently fused with the structural codes produced by the Multi-view Pattern-bank Subgraph Encoder, ensuring that both periodic trends and local bursts are preserved for downstream cross-city tasks.
+
+\subsection{Multi-view Pattern-bank Subgraph Encoder}
+
+Urban subgraphs exhibit complex multi-relational links (geography, flow, POI) whose structural patterns recur across cities. Motivated by the temporal pattern bank in TPB \cite{TPB}, we build multi-view pattern banks that memorise these motifs and transfer them to a target city. Concretely, for each heterogeneous subgraph $\mathcal G^{\text{sub}}_{i}$ produced by the sampler, our encoder operates in two stages:
+
+
+\textbf{Multi-view message passing.}
+Given a heterogeneous subgraph $\mathcal G^{\text{sub}}_{i}$, we apply a relation-specific GCN that shares convolution kernels but keeps independent relation vectors. the $l$-th layer updates the $r$-view hidden state $\mathbf H^{(l)}_r$ by
+\begin{equation}
+\begin{aligned}
+    \mathbf H^{(l)}_r=\sigma\bigl(\mathbf E^{(r)}\mathbf H^{(l-1)}_r\bigr),
+\end{aligned}
+\end{equation}
+where $\mathbf E^{(r)}$ is the normalised adjacency matrix in view $r$ (cf.\ Eq.~\ref{eq:edge_weight}) and $\mathbf H^{(0)}_r=\mathbf Z_{\text{flow}}$. A cross-view attention module fuses the three relation streams:
+\begin{equation}
+\begin{gathered}
+    \mathbf H^{\text{fuse}}=\sum_{r=1}^3 \alpha_r\mathbf H^{(L)}_r,\\
+    \alpha_r=\frac{\exp(e_r)}{\sum_{s=1}^3\exp(e_s)}, \quad
+    e_r=f_{\text{attn}}\left(\mathbf H^{(L)}_r\right),\\
+\end{gathered}
+\end{equation}
+yielding node embeddings $\mathbf Z_0=\mathbf H^{\text{fuse}}$.
+
+\textbf{Multi-View Adapter.}
+Although $\mathbf Z_{0}$ encodes rich spatial cues, its semantics remain entangled. We therefore disentangle and discretise the embeddings using three view-specific pattern banks $\{\mathbf C^{(r)}\}_{r=1}^{3}$, each storing $M_r$ canonical motifs shared across cities. For every node embedding $\mathbf z_{j}\in\mathbf Z_{0}$ we compute:
+\begin{equation}
+    \begin{aligned}
+    \mathbf z^{(r)}_j &= \sum_{m=1}^{M_r} \alpha_{jmr}\, \mathbf c^{(r)}_m,\\
+    \alpha_{jmr}&= \frac{\exp(e_{jmr})}{\sum_{m'=1}^{M_r}\exp(e_{jm'r})},\\
+    e_{jmr}&= \frac{\bigl\langle\mathbf z_j,\;\mathbf c^{(r)}_m\bigr\rangle}{\sqrt d}.\\
+    \end{aligned}
+\end{equation}
+Finally, the codes are blended via a learnable convex combination:
+\begin{equation}
+    \begin{aligned}
+        \mathbf z^{\text p}_j &= \sum_{r=1}^{3} \lambda_r\, \mathbf z^{(r)}_j,\\
+        \lambda_r &= \frac{\exp\bigl(\mathbf q^\top \mathbf W_r\bigr)}{\sum_{s=1}^{3}\exp\bigl(\mathbf q^\top \mathbf W_s\bigr)},
+    \end{aligned}
+\end{equation}
+where $\mathbf q$ is a global query and $\mathbf W_{r}$ projects the centroid of view $r$. Finally, the pattern-aware region representation is concated as $\mathbf Z_{\text p}=[\mathbf z^{\text p}_{1},\dots,\mathbf z^{\text p}_{k}]$. As pattern banks are shared while attention weights are input-adaptive, the adapter can absorb transferable motifs during pre-training and re-weight them on-the-fly for a target city, achieving superior cross-city generalisation without hard nearest-code assignments.
+
+\subsection{Model Optimization}
+
+Graph codes $\mathbf Z_{\mathrm p}$ distilled by the Multi-view Pattern-bank Subgraph Encoder are semantically rich yet un–supervised. To steer them towards mobility forecasting, functional similarity and geo-proximity awareness, we design a light-weight decoder that jointly reconstructs temporal patches and aligns three spatial views.
+
+Given $\mathbf Z_{\mathrm p}=\bigl[\mathbf z^{\mathrm p}_1,\ldots,\mathbf z^{\mathrm p}_k\bigr]$, we first recover patch-level flows through a linear decoder $\mathbf W_{\text{patch}}$. The reconstruction loss is mean-squared error between prediction and ground-truth patch:
+\begin{equation}
+    \begin{aligned}
+        \mathcal L_{\text{patch}} &=\frac1N\sum_{i=1}^{N}\bigl\lVert\sigma(\mathbf W_{\text{patch}}\mathbf z^{\mathrm p}_i)-\hat{\mathbf x}_i\bigr\rVert_2^2,
+    \end{aligned}
+\end{equation}
+encouraging faithful temporal recovery. 
+
+To capture inter-regional mobility, we reconstruct OD matrix and minimise the bidirectional KL divergence between the empirical distribution and the softmax of inner products:
+\begin{equation}
+    \begin{aligned}
+        \mathcal L_{\text{mob}}=&\frac1N\sum_{i} \mathrm{KL}\left(\mathbf P_{i,:}\middle| \mathrm{softmax}\bigl[\mathbf z_i^{\mathrm p}\cdot\mathbf z_j^{\mathrm p}\bigr]_{j}\right)+\\
+        &\mathrm{KL}\left(\mathbf P_{:,i}\middle| \mathrm{softmax}\bigl[\mathbf z_i^{\mathrm p}\cdot\mathbf z_j^{\mathrm p}\bigr]_{j}\right),
+    \end{aligned}
+\end{equation}
+thereby encoding directional flow asymmetry.
+
+To further enhance the awareness on functional similarity, we decode POI affinity as follows:
+\begin{equation}
+    \begin{aligned}
+        \mathcal L_{\text{poi}}   &=\bigl\lVert \mathbf S- \mathbf S^{\mathrm{pred}}\bigr\rVert_F^2,
+        \quad \mathbf S^{\mathrm{pred}}=\bigl[\mathbf z_i^{\mathrm {p}}\cdot\mathbf z_j^{\mathrm {p}}\bigr]_{i,j},
+    \end{aligned}
+\end{equation}
+where $\mathbf S$ denotes the observed POI-distribution similarity.
+
+Finally, we incorporate the geo-proximity through a triplet-margin loss. We concatenate node embeddings $g_{ij}= \mathbf z^{\mathrm n}_i\Vert\mathbf z^{\mathrm n}_j$ and compute loss as follows:
+\begin{equation}
+    \begin{aligned}
+        \mathcal L_{\text{geo}}   =&\frac{1}{|\mathcal T|}\sum_{(a,p,n)\in\mathcal T}
+        \max \{0,\\
+        &1-\lVert\mathbf g_a-\mathbf g_p\rVert_2+\lVert\mathbf g_a-\mathbf g_n\rVert_2\},
+    \end{aligned}
+\end{equation}
+with $\mathcal T$ the set of (anchor, positive, negative) triplets.
+
+The overall objective combines the four losses:
+\begin{equation}
+\mathcal L=\lambda_{\text p}\mathcal L_{\text{patch}}+
+\lambda_{\text s}\mathcal L_{\text{poi}}+
+\lambda_{\text m}\mathcal L_{\text{mob}}+
+\lambda_{\text g}\mathcal L_{\text{geo}},
+\end{equation}
+Optimising this objective yields region embeddings $\mathbf Z_{\mathrm p}$ that jointly encode temporal dynamics, functional affinity, mobility interactions, and geographic adjacency.
+
+\subsection{Training Procedure and Downstream Task Decoder}
+The proposed MAP-STAR framework adopts a pre-training–fine-tuning paradigm. During pre-training, heterogeneous subgraphs are sampled from the source city to update the Multi-view Pattern Bank, thereby injecting knowledge of spatial topology, inter-regional mobility, and attribute similarity into the multi-view pattern-bank. In the fine-tuning stage, the parameters of the Patch Flow Encoder and the Multi-view Pattern-bank Subgraph Encoder are frozen. The model resamples subgraphs only in the target city and encodes them to obtain multi-view representations $\mathbf Z'_{\mathrm p}$. These representations are then passed to a lightweight decoder for the downstream task:
+\begin{equation}
+\hat{\mathbf Y}= \mathrm{MLP}\bigl(\mathbf Z'_{\mathrm p}\bigr)
+\end{equation}
+which produces predictions for downstream applications.

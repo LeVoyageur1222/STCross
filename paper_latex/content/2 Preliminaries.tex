@@ -1,0 +1,32 @@
+\section{Preliminaries}
+
+\textbf{Definition 1 (Urban Flow Observations).} Given a set of cities $\mathcal{C}$, each city $c \in \mathcal{C}$ contains $N_c$ spatial units, and its historical flow sequence is denoted as $
+\mathbf{X}^{(c)} = [\mathbf{x}^{(c)}_1, \mathbf{x}^{(c)}_2, \ldots, \mathbf{x}^{(c)}_{T_c}] \in \mathbb{R}^{T_c \times N_c}$, where $\mathbf{x}^{(c)}_t \in \mathbb{R}^{N_c}$ denotes the flow state of city $c$ at time step $t$. Given a history window length $H$ and a prediction window length $P$, a standard flow forecasting sample can be written as:
+
+\begin{equation}
+    \begin{aligned}
+        \left(\mathbf{X}^{(c)}_{t-H+1:t}, \mathbf{Y}^{(c)}_{t+1:t+P}\right), \quad \mathbf{Y}^{(c)}_{t+1:t+P} = \mathbf{X}^{(c)}_{t+1:t+P}
+    \end{aligned}
+\end{equation}
+
+
+\textbf{Definition 2 (Anomalous Flow Context).} Urban flows are affected by external factors such as holidays, extreme weather, large-scale events, or emergencies. For city $c$, let $\mathbf{m}^{(c)} \in {0,1}^{T_c}$ denote the anomaly context sequence, where $m^{(c)}_t=1$ indicates that time step $t$ is affected by an anomalous event, and $m^{(c)}_t=0$ indicates a regular operating state. For a sample with forecasting origin $t$, the anomaly indicator of its future window is defined as $a^{(c)}_t = \mathbb{I}\left(\sum_{\tau=t+1}^{t+P} m^{(c)}_\tau > 0\right)$.
+
+A sample with $a^{(c)}_t=1$ is regarded as an anomalous flow forecasting sample, while a sample with $a^{(c)}_t=0$ is a regular one. This indicator captures the change of forecasting context induced by external disturbances, distinguishing the modeling objective of anomalous periods from regular periodic flow forecasting.
+
+\textbf{Problem Formulation (Cross-City Anomalous Urban Flow Forecasting).} Given a source city $c_s$ and a target city $c_t$ with $c_s \neq c_t$, the two cities may differ in the number of spatial units, flow scales, periodic patterns, and anomalous event distributions. Let $\mathcal{D}_{s}$ denote the training set from the source city and $\mathcal{D}_{t}$ the test set from the target city:
+\begin{equation}
+\begin{gathered}
+    \mathcal{D}_{s}={\left(\mathbf{X}^{(c_s)}_{t-H+1:t}, \mathbf{m}^{(c_s)}_{t-H+1:t}, \mathbf{Y}^{(c_s)}_{t+1:t+P}\right)}_{t \in \mathcal{T}_s}, \\
+    \mathcal{D}_{t}={\left(\mathbf{X}^{(c_t)}_{t-H+1:t}, \mathbf{m}^{(c_t)}_{t-H+1:t}, \mathbf{Y}^{(c_t)}_{t+1:t+P}\right)}_{t \in \mathcal{T}_t}
+\end{gathered}
+\end{equation}
+The objective is to learn a transferable forecasting function $f_\theta$ on $\mathcal{D}_{s}$ and directly apply it to the target city:
+\begin{equation}
+\begin{gathered}
+    \theta^* = \arg\min_{\theta} \sum_{t \in \mathcal{T}_s} \ell\left(f_{\theta}\left(\mathbf{X}^{(c_s)}_{t-H+1:t}, \mathbf{m}^{(c_s)}_{t-H+1:t}\right), \mathbf{Y}^{(c_s)}_{t+1:t+P}\right),\\
+    \widehat{\mathbf{Y}}^{(c_t)}_{t+1:t+P}
+= f_{\theta^*}\left(\mathbf{X}^{(c_t)}_{t-H+1:t}, \mathbf{m}^{(c_t)}_{t-H+1:t}\right)
+\end{gathered}
+\end{equation}
+Under this setting, the core problem is no longer conventional forecasting within a single city, but how to learn a flow forecasting function that transfers to anomalous scenarios in the target city when cross-city distribution discrepancies and anomalous sample scarcity coexist.

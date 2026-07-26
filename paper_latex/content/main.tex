@@ -1,0 +1,140 @@
+%%%% ijcai26.tex
+
+\typeout{IJCAI--ECAI 26 Instructions for Authors}
+
+% These are the instructions for authors for IJCAI--ECAI 26.
+
+\documentclass{article}
+\pdfpagewidth=8.5in
+\pdfpageheight=11in
+
+% The file ijcai26.sty is a copy from ijcai22.sty
+% The file ijcai22.sty is NOT the same as previous years'
+\usepackage{ijcai26}
+
+% Use the postscript times font!
+\usepackage{times}
+\usepackage{soul}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usepackage[utf8]{inputenc}
+\usepackage[small]{caption}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage[switch]{lineno}
+\usepackage{amsfonts}
+\usepackage{multirow}
+
+% Comment out this line in the camera-ready submission
+\linenumbers
+
+\urlstyle{same}
+
+% the following package is optional:
+%\usepackage{latexsym}
+
+% See https://www.overleaf.com/learn/latex/theorems_and_proofs
+% for a nice explanation of how to define new theorems, but keep
+% in mind that the amsthm package is already included in this
+% template and that you must *not* alter the styling.
+\newtheorem{example}{Example}
+\newtheorem{theorem}{Theorem}
+
+% Following comment is from ijcai97-submit.tex:
+% The preparation of these files was supported by Schlumberger Palo Alto
+% Research, AT\&T Bell Laboratories, and Morgan Kaufmann Publishers.
+% Shirley Jowell, of Morgan Kaufmann Publishers, and Peter F.
+% Patel-Schneider, of AT\&T Bell Laboratories collaborated on their
+% preparation.
+
+% These instructions can be modified and used in other conferences as long
+% as credit to the authors and supporting agencies is retained, this notice
+% is not changed, and further modification or reuse is not restricted.
+% Neither Shirley Jowell nor Peter F. Patel-Schneider can be listed as
+% contacts for providing assistance without their prior permission.
+
+% To use for other conferences, change references to files and the
+% conference appropriate and use other authors, contacts, publishers, and
+% organizations.
+% Also change the deadline and address for returning papers and the length and
+% page charge instructions.
+% Put where the files are available in the appropriate places.
+
+
+% PDF Info Is REQUIRED.
+
+% Please leave this \pdfinfo block untouched both for the submission and
+% Camera Ready Copy. Do not include Title and Author information in the pdfinfo section
+\pdfinfo{
+/TemplateVersion (IJCAI.2026.0)
+}
+
+\title{MAP-STAR: Transferable Urban Region Representation Learning via Multi-view Pattern-bank Adaptation and Heterogeneous Subgraph Sampling}
+
+% Single author syntax
+% \author{
+%     Author Name
+%     \affiliations
+%     Affiliation
+%     \emails
+%     email@example.com
+% }
+
+\author{
+    Anonymous Author(s)
+}
+
+% Multiple author syntax (remove the single-author syntax above and the \iffalse ... \fi here)
+\iffalse
+\author{
+First Author$^1$
+\and
+Second Author$^2$\and
+Third Author$^{2,3}$\And
+Fourth Author$^4$\\
+\affiliations
+$^1$First Affiliation\\
+$^2$Second Affiliation\\
+$^3$Third Affiliation\\
+$^4$Fourth Affiliation\\
+\emails
+\{first, second\}@example.com,
+third@other.example.com,
+fourth@example.com
+}
+\fi
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+    % Urban computing increasingly depends on generic representations that distill both the spatial layout and the functional dynamics of city regions.  Yet most current models entangle these representations with the idiosyncratic graph structure of a single city, so performance deteriorates whenever zoning schemes, mobility patterns, or point-of-interest (POI) distributions change.  We tackle this limitation with MAP-STAR, a Multi-view Pattern-bank Adaptation with heterogeneous Subgraph sampling for Transferable Area Representation framework. Concretely, MAP-STAR first samples a triad of complementary subgraphs for every region: neighbors defined by geographic proximity, functional peers linked by POI similarity, and mobility partners inferred from origin–destination flows.  A lightweight multi-view adapter then encodes each subgraph into a shared pattern bank whose parameters are updated during source-city pre-training and reused unchanged in target cities. Extensive experiments across diverse urban downstream tasks demonstrate that MAP-STAR not only achieves state-of-the-art performance but also significantly enhances cross-city generalization, validating its effectiveness in learning spatially structured and semantically rich transferable representations.
+
+    Urban region representation learning increasingly requires transferable embeddings that remain robust under cross-city graph distribution shifts. However, most existing methods couple representation learning with a city-specific full-graph topology, making the learned message-passing patterns hard to transfer across cities with different spatial configurations. We tackle this limitation with MAP-STAR, a framework that shifts learning from the full city graph to consistent multi-view subgraphs and distills reusable structural and semantic motifs into a shared pattern bank. Concretely, MAP-STAR samples heterogeneous subgraphs by jointly considering geographic proximity, functional similarity, and mobility interactions, and uses a multi-view pattern-bank adapter to improve cross-city robustness. Extensive experiments across diverse cities and urban downstream tasks demonstrate that MAP-STAR not only achieves state-of-the-art performance but also significantly enhances cross-city generalization, validating its effectiveness in learning spatially structured and semantically rich transferable representations.
+
+    % The construction of smart city clusters requires learning transferable region embeddings across different graph topologies. However, most existing methods are trained on fixed graphs, making it difficult to transfer the learned spatiotemporal knowledge between cities with varying topologies. We address this issue with MAP-STAR, a framework that transforms traditional full-graph learning into subgraph learning by distilling structural and functional semantics into a shared pattern bank. Specifically, MAP-STAR samples heterogeneous subgraphs by simultaneously considering geographic proximity, functional similarity, and mobility interactions, and updates the multi-view pattern bank during training, thereby improving cross-city robustness. Extensive experiments on multiple cities and downstream tasks demonstrate that MAP-STAR not only achieves state-of-the-art performance but also significantly improves cross-city generalization ability, validating its effectiveness in learning transferable representations rich in regional structure and functional semantics.
+\end{abstract}
+
+\input{FormattingGuidelines-IJCAI-ECAI-26/content/1 Introduction_v2}
+\input{FormattingGuidelines-IJCAI-ECAI-26/content/2 Preliminaries}
+\input{FormattingGuidelines-IJCAI-ECAI-26/content/3 The Proposed Method_v2}
+\input{FormattingGuidelines-IJCAI-ECAI-26/content/4 Experiment}
+\input{FormattingGuidelines-IJCAI-ECAI-26/content/5 Related Work}
+\input{FormattingGuidelines-IJCAI-ECAI-26/content/6 Conclusion}
+\clearpage
+\appendix
+
+
+%% The file named.bst is a bibliography style file for BibTeX 0.99c
+\bibliographystyle{named}
+\bibliography{ijcai26}
+
+\input{FormattingGuidelines-IJCAI-ECAI-26/content/7 Appendix}
+
+\end{document}
+

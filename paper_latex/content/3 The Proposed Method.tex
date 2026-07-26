@@ -1,0 +1,120 @@
+\section{Methodology}
+
+% ProtoDRIFT 的核心思想是将跨城市异常客流预测从原始客流空间转化到相对于城市正常状态的偏差空间中进行建模。对于任意城市 $c$，原始客流 $\mathbf{X}^{(c)}$ 同时包含城市自身的长期通勤规律、空间规模差异以及异常事件造成的短期扰动。如果直接在 $\mathbf{X}^{(c)}$ 上学习跨城市预测函数，模型容易把城市特定的常规模式误认为可迁移异常模式。为此，ProtoDRIFT 首先为每个城市构造正常参照，再学习相对于该参照的异常偏差，并通过原型学习和互信息约束解耦分别刻画可迁移异常语义与城市条件差异。
+% 整体而言，ProtoDRIFT 包含四个主要步骤。首先，根据非异常历史观测构造城市特定的正常参照 $\mathbf{B}^{(c)}$，并将输入客流转换为偏差表示 $\boldsymbol{\Delta}^{(c)}$。其次，在偏差空间中学习一组可迁移异常原型，用于归纳不同城市间共享的异常变化模式。再次，通过互信息约束的双分支结构分离异常类型表示和城市条件表示，避免共享异常语义被城市特定因素污染。最后，模型将未来正常参照、可迁移异常原型预测项和城市条件调整项组合起来，得到目标城市未来客流预测：
+
+The core idea of ProtoDRIFT is to reformulate cross-city anomalous urban flow forecasting from the raw flow space into a deviation space relative to each city's normal state. For any city $c$, the raw flows $\mathbf{X}^{(c)}$ simultaneously contain the city's long-term commuting regularities, spatial-scale differences, and short-term disturbances caused by anomalous events. If a cross-city forecasting function is learned directly on $\mathbf{X}^{(c)}$, the model is prone to mistaking city-specific regular patterns for transferable anomalous patterns. To this end, ProtoDRIFT first constructs a normal reference for each city, then learns anomaly deviations relative to this reference, and characterizes transferable anomaly semantics and city-conditioned differences separately through prototype learning and mutual-information-constrained disentanglement.
+
+Overall, ProtoDRIFT consists of four main steps. First, it constructs a city-specific normal reference $\mathbf{B}^{(c)}$ from non-anomalous historical observations and converts the input flows into deviation representations $\boldsymbol{\Delta}^{(c)}$. Second, it learns a set of transferable anomaly prototypes in the deviation space to summarize anomalous variation patterns shared across cities. Third, it separates the anomaly-type representation from the city-conditioned representation through a mutual-information-constrained dual-branch structure, preventing the shared anomaly semantics from being contaminated by city-specific factors. Finally, the model combines the future normal reference, the transferable prototype-based deviation term, and the city-conditioned adjustment term to produce the target flow forecast:
+
+\begin{equation}
+    \begin{aligned}
+        \widehat{\mathbf{Y}}^{(c)}_{t+1:t+P} = \mathbf{B}^{(c)}_{t+1:t+P} + \widehat{\boldsymbol{\Delta}}^{(c)}_{\mathrm{type}} + \widehat{\boldsymbol{\Delta}}^{(c)}_{\mathrm{adj}},
+    \end{aligned}
+\end{equation}
+
+\subsection{Transferable Anomaly Prototype Design}
+
+% 跨城市异常预测的首要困难在于，不同城市的绝对客流规模和常规周期模式差异显著，而异常事件引发的相对变化可能具有更强的共享语义。因此，ProtoDRIFT 不直接在原始客流空间中学习异常模式，而是先构造城市特定的正常参照，再在偏差空间中进行原型建模。
+% 给定城市 $c$ 的历史观测，正常参照函数 $\mathcal{B}^{(c)}(\cdot)$ 用于估计非异常上下文下的常规客流状态。对输入窗口和预测窗口，分别记：在实现上，$\mathcal{B}^{(c)}$ 可以由非异常历史观测统计得到，例如按空间单元、星期属性和小时属性聚合常规客流模式。该参照不承担最终预测功能，而是用于从原始客流中剥离城市特定的正常成分。输入窗口的偏差表示定义为：
+% 为了进一步减弱不同城市间客流幅度差异，ProtoDRIFT 对偏差进行尺度归一化：
+% 其中 $\sigma^{(c)}_{\Delta}$ 表示城市 $c$ 的偏差尺度统计量，$\epsilon$ 为数值稳定项。随后，异常编码器 $\mathrm{AEnc}(\cdot)$ 将归一化偏差映射为异常表示：
+% 为了获得紧凑且可迁移的异常模式表达，ProtoDRIFT 引入异常原型库 $\mathcal{P}={(\mathbf{e}_k,\mathbf{r}_k)}_{k=1}^{K}$，其中 $\mathbf{e}_k$ 是第 $k$ 个原型的嵌入，$\mathbf{r}_k$ 是对应的未来偏差模式。给定异常表示 $\mathbf{z}_a$，模型根据其与各原型嵌入的距离计算原型分配权重：
+% 由此，可迁移异常原型预测项表示为：
+% 这一设计使模型不需要为每个城市记忆大量异常样本，而是通过有限数量的原型概括偏差空间中的典型异常形态。正常参照减少城市尺度干扰，偏差表示突出异常相对变化，原型库则为跨城市共享异常语义提供可解释的结构化载体。
+
+The primary difficulty of cross-city anomaly forecasting is that the absolute flow scales and regular periodic patterns differ substantially across cities, whereas the relative variations induced by anomalous events may carry stronger shared semantics. Therefore, instead of learning anomalous patterns directly in the raw flow space, ProtoDRIFT first constructs a city-specific normal reference and then performs prototype modeling in the deviation space.
+
+Given the historical observations of city $c$, the normal reference function $\mathcal{B}^{(c)}(\cdot)$ estimates the regular flow state under non-anomalous contexts. We denote input window as $\mathbf{B}^{(c)}_{t-H+1:t}$ and the prediction window $\mathbf{B}^{(c)}_{t+1:t+P}$. In practice, $\mathcal{B}^{(c)}$ can be estimated from non-anomalous historical observations, e.g., by aggregating regular flow patterns over spatial units, day-of-week, and hour-of-day attributes. This reference is not responsible for the final prediction itself; instead, it serves to strip the city-specific normal component from the raw flows. Therefore, the deviation representation of the input window is defined as $\boldsymbol{\Delta}^{(c)}_{t-H+1:t} = \mathbf{X}^{(c)}_{t-H+1:t} - \mathbf{B}^{(c)}_{t-H+1:t}.$
+
+To further reduce the flow-magnitude discrepancies across cities, ProtoDRIFT applies scale normalization to the deviations $\widetilde{\boldsymbol{\Delta}}^{(c)}_{t-H+1:t} = \frac{\boldsymbol{\Delta}^{(c)}_{t-H+1:t}}{\sigma^{(c)}_{\Delta}}$, where $\sigma^{(c)}_{\Delta}$ is the deviation-scale statistic of city $c$. The anomaly encoder $\mathrm{AEnc}(\cdot)$ then maps the normalized deviations into the anomaly representation:
+
+\begin{equation}
+    \begin{aligned}
+        \mathbf{z}_a = \mathrm{AEnc}\left(\widetilde{\boldsymbol{\Delta}}^{(c)}_{t-H+1:t}\right),
+    \end{aligned}
+\end{equation}
+
+To obtain a compact and transferable expression of anomalous patterns, ProtoDRIFT introduces an anomaly prototype bank $\mathcal{P}={(\mathbf{e}_k,\mathbf{r}_k)}_{k=1}^{K}$, where $\mathbf{e}_k$ is the embedding of the $k$-th prototype and $\mathbf{r}_k$ is its associated future deviation pattern. Given the anomaly representation $\mathbf{z}_a$, the model computes the prototype assignment weights according to its distances to the prototype embeddings:
+\begin{equation}
+    \begin{aligned}
+        w_k = \frac{\exp\left(-d(\mathbf{z}_a,\mathbf{e}_k)\right)}{\sum_{j=1}^{K}\exp\left(-d(\mathbf{z}_a,\mathbf{e}_j)\right)},
+    \end{aligned}
+\end{equation}
+The transferable prototype-based deviation term is then expressed as $\widehat{\boldsymbol{\Delta}}^{(c)}_{\mathrm{type}} = \sum_{k=1}^{K} w_k \mathbf{r}_k$. With this design, the model does not need to memorize a large number of anomalous samples for each city; instead, it summarizes the typical anomalous shapes in the deviation space with a limited number of prototypes. The normal reference reduces the interference of city scales, the deviation representation highlights the relative anomalous variations, and the prototype bank provides an interpretable, structured carrier for anomaly semantics shared across cities.
+
+
+\subsection{Mutual-Information-Constrained Disentanglement}
+
+% 仅依赖异常原型仍不足以完全解决跨城市迁移问题。即使在偏差空间中，异常变化也可能包含城市特定的响应幅度、局部空间结构和事件影响范围。如果这些因素被混入可迁移异常表示，模型在目标城市上仍可能出现迁移偏差。因此，ProtoDRIFT 进一步引入互信息约束的解耦设计，将异常类型表示与城市条件表示分开建模。
+% 具体而言，模型使用异常分支从归一化偏差中提取可迁移异常表示 $\mathbf{z}_a$，同时使用城市条件分支从原始偏差中提取城市特定表示 $\mathbf{z}_s$：
+% 其中，$\mathbf{z}_a$ 主要服务于异常原型匹配，刻画跨城市共享的异常类型；$\mathbf{z}_s$ 则保留与城市条件相关的局部偏差信息，用于生成城市特定调整项。给定 $\mathbf{z}_s$，城市调整解码器 $\mathrm{CAD}(\cdot)$ 输出：
+% 为了避免 $\mathbf{z}_a$ 与 $\mathbf{z}_s$ 学到高度重叠的信息，ProtoDRIFT 对二者引入互信息约束：
+% 其中 $\widehat{I}(\cdot;\cdot)$ 表示对两个表示之间互信息的可优化估计。训练时最小化该项可以降低异常分支和城市条件分支之间的信息冗余，促使 $\mathbf{z}_a$ 更集中于异常类型，$\mathbf{z}_s$ 更集中于城市条件调整。需要强调的是，互信息约束并不单独等价于严格的城市不变性保证；它与偏差空间建模、尺度归一化和容量约束共同作用，形成更适合跨城市异常迁移的表示分工。
+
+Anomaly prototypes alone are still insufficient to fully address cross-city transfer. Even in the deviation space, anomalous variations may contain city-specific response magnitudes, local spatial structures, and event coverage. If such factors leak into the transferable anomaly representation, the model may still suffer from transfer bias in the target city. ProtoDRIFT therefore further introduces a mutual-information-constrained disentanglement design that models the anomaly-type representation and the city-conditioned representation separately.
+
+Specifically, the anomaly branch extracts the transferable anomaly representation $\mathbf{z}_a$ from the normalized deviations, while the city-conditioned branch extracts the city-specific representation $\mathbf{z}_s$ from the raw deviations:
+
+\begin{equation}
+\begin{gathered}
+    \mathbf{z}_a = \mathrm{AEnc}\left(\widetilde{\boldsymbol{\Delta}}^{(c)}_{t-H+1:t}\right), \\
+    \mathbf{z}_s = \mathrm{CEnc}\left(\boldsymbol{\Delta}^{(c)}_{t-H+1:t}\right),
+\end{gathered}
+\end{equation}
+Here, $\mathbf{z}_a$ mainly serves prototype matching and characterizes the anomaly types shared across cities, whereas $\mathbf{z}_s$ preserves the local deviation information related to city conditions and is used to generate the city-specific adjustment term. Given $\mathbf{z}_s$, the city adjustment decoder $\mathrm{CAD}(\cdot)$ outputs $\widehat{\boldsymbol{\Delta}}^{(c)}_{\mathrm{adj}} = \mathrm{CAD}(\mathbf{z}_s)$. To prevent $\mathbf{z}_a$ and $\mathbf{z}_s$ from learning highly overlapping information, ProtoDRIFT imposes a mutual information constraint on the two representations:
+
+\begin{equation}
+    \begin{aligned}
+        \mathcal{L}_{\mathrm{mic}} = \widehat{I}(\mathbf{z}_a;\mathbf{z}_s),
+    \end{aligned}
+\end{equation}
+where $\widehat{I}(\cdot;\cdot)$ denotes an optimizable estimate of the mutual information between the two representations. Minimizing this term during training reduces the information redundancy between the anomaly branch and the city-conditioned branch, encouraging $\mathbf{z}_a$ to focus on anomaly types and $\mathbf{z}_s$ on city-conditioned adjustments. We emphasize that the mutual information constraint alone is not equivalent to a strict guarantee of city invariance; rather, it works in concert with deviation-space modeling, scale normalization, and the capacity constraint to form a division of representational labor that better suits cross-city anomaly transfer.
+
+
+\subsection{Training Objective}
+
+% ProtoDRIFT 的训练目标由预测损失和多个结构化正则项共同组成。首先，最终预测结果为未来正常参照、异常原型预测项和城市条件调整项之和：
+% 预测损失约束模型输出接近真实未来客流：
+% 除预测损失外，ProtoDRIFT 还引入容量约束、互信息约束、原型约束和调整约束，以稳定两个核心设计的学习过程。总体训练目标为：
+% 其中，$\mathcal{L}_{\mathrm{cap}}$ 用于限制异常表示容量，减少城市特定细节泄漏到可迁移分支；$\mathcal{L}_{\mathrm{mic}}$ 降低异常表示与城市条件表示之间的冗余；$\mathcal{L}_{\mathrm{proto}}$ 提升异常原型的判别性和使用稳定性；$\mathcal{L}_{\mathrm{adj}}$ 约束城市调整分支，避免其完全覆盖共享异常原型的作用。通过这些目标的联合优化，模型既能保持最终预测精度，又能维持可迁移异常表示和城市条件表示之间的功能分工。
+
+The training objective of ProtoDRIFT combines the forecasting loss with several structured regularization terms. First, the final prediction is the sum of the future normal reference, the prototype-based deviation term, and the city-conditioned adjustment term. The forecasting loss drives the model output toward the ground-truth future flows:
+
+\begin{equation}
+    \begin{aligned}
+        \mathcal{L}_{\mathrm{pred}}
+= \ell\left(\widehat{\mathbf{Y}}^{(c)}_{t+1:t+P},\mathbf{Y}^{(c)}_{t+1:t+P}\right),
+    \end{aligned}
+\end{equation}
+
+Beyond the forecasting loss, ProtoDRIFT introduces a capacity constraint, a mutual information constraint, a prototype regularization, and an adjustment regularization to stabilize the learning of the two core designs. The overall training objective is:
+
+\begin{equation}
+    \begin{aligned}
+        \mathcal{L} = \mathcal{L}_{\mathrm{pred}} + \alpha \mathcal{L}_{\mathrm{cap}} + \beta \mathcal{L}_{\mathrm{mic}} + \gamma \mathcal{L}_{\mathrm{proto}} + \zeta \mathcal{L}_{\mathrm{adj}},
+    \end{aligned}
+\end{equation}
+
+Specifically, $\mathcal{L}_{\mathrm{cap}}$ limits the capacity of the anomaly representation to reduce the leakage of city-specific details into the transferable branch; $\mathcal{L}_{\mathrm{mic}}$ reduces the redundancy between the anomaly representation and the city-conditioned representation; $\mathcal{L}_{\mathrm{proto}}$ improves the discriminability and usage stability of the anomaly prototypes; and $\mathcal{L}_{\mathrm{adj}}$ regularizes the city adjustment branch so that it does not fully override the shared anomaly prototypes. Jointly optimizing these objectives allows the model to maintain forecasting accuracy while preserving the functional division between the transferable anomaly representation and the city-conditioned representation.
+
+
+
+\subsection{Cross-City Inference}
+
+% 在跨城市设置下，ProtoDRIFT 先在源城市 $c_s$ 上学习异常原型、解耦表示和预测目标，然后将训练后的主体参数迁移到目标城市 $c_t$。与依赖固定节点集合或城市专属图结构的方法不同，ProtoDRIFT 的推理过程不要求源城市与目标城市具有相同的空间单元数量，也不需要为目标城市重新设计节点嵌入或邻接结构。
+% 给定目标城市输入窗口 $\mathbf{X}^{(c_t)}_{t-H+1:t}$，模型首先构造目标城市自身的正常参照 $\mathbf{B}^{(c_t)}$，并计算目标偏差表示：
+% 随后，模型复用源城市训练得到的异常编码器、原型库、城市条件编码器和调整解码器，得到 $\widehat{\boldsymbol{\Delta}}^{(c_t)}_{\mathrm{type}}$ 与 $\widehat{\boldsymbol{\Delta}}^{(c_t)}_{\mathrm{adj}}$，并输出目标城市预测：
+% 因此，ProtoDRIFT 的跨城市适配主要发生在目标城市正常参照和偏差表示构造阶段，而异常原型与解耦表示模块可以从源城市迁移使用。这种设计使模型能够在不同城市尺度和异常分布下复用共享异常语义，同时保留对目标城市局部客流响应的调整能力。
+
+Under the cross-city setting, ProtoDRIFT first learns the anomaly prototypes, the disentangled representations, and the forecasting objective on the source city $c_s$, and then transfers the trained main parameters to the target city $c_t$. Unlike methods that rely on a fixed node set or city-specific graph structures, the inference procedure of ProtoDRIFT neither requires the source and target cities to share the same number of spatial units, nor needs re-designed node embeddings or adjacency structures for the target city.
+
+Given the target-city input window $\mathbf{X}^{(c_t)}_{t-H+1:t}$, the model first constructs the target city's own normal reference $\mathbf{B}^{(c_t)}$ and computes the target deviation representation $\boldsymbol{\Delta}^{(c_t)}_{t-H+1:t} = \mathbf{X}^{(c_t)}_{t-H+1:t} - \mathbf{B}^{(c_t)}_{t-H+1:t}$. The model then reuses the anomaly encoder, the prototype bank, the city-conditioned encoder, and the adjustment decoder trained on the source city to obtain $\widehat{\boldsymbol{\Delta}}^{(c_t)}_{\mathrm{type}}$ and $\widehat{\boldsymbol{\Delta}}^{(c_t)}_{\mathrm{adj}}$, and outputs the target-city forecast:
+
+\begin{equation}
+    \begin{aligned}
+        \widehat{\mathbf{Y}}^{(c_t)}_{t+1:t+P} = \mathbf{B}^{(c_t)}_{t+1:t+P} + \widehat{\boldsymbol{\Delta}}^{(c_t)}_{\mathrm{type}} + \widehat{\boldsymbol{\Delta}}^{(c_t)}_{\mathrm{adj}},
+    \end{aligned}
+\end{equation}
+
+Therefore, the cross-city adaptation of ProtoDRIFT mainly takes place in the construction of the target city's normal reference and deviation representation, whereas the anomaly prototypes and the disentangled representation modules are transferred from the source city. This design enables the model to reuse shared anomaly semantics under different city scales and anomaly distributions, while retaining the ability to adjust to the target city's local flow responses.

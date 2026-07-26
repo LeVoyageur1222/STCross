@@ -1,0 +1,66 @@
+\documentclass[letterpaper]{article} % DO NOT CHANGE THIS
+\usepackage[submission]{aaai2027} % DO NOT CHANGE THIS
+
+% Required by the official AAAI-27 template
+\usepackage[hyphens]{url} % DO NOT CHANGE THIS
+\usepackage{graphicx} % DO NOT CHANGE THIS
+\urlstyle{rm} % DO NOT CHANGE THIS
+\def\UrlFont{\rm} % DO NOT CHANGE THIS
+\usepackage{natbib} % DO NOT CHANGE THIS AND DO NOT ADD OPTIONS
+\usepackage{caption} % DO NOT CHANGE THIS AND DO NOT ADD OPTIONS
+\frenchspacing % DO NOT CHANGE THIS
+
+% Packages used by, or commonly needed by, this paper
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{multirow}
+
+% Uncomment these two lines only if the paper contains algorithm environments.
+% \usepackage{algorithm}
+% \usepackage{algorithmic}
+
+\pdfinfo{
+/TemplateVersion (2027.1)
+}
+
+% The official template permits changing this to 1 or 2 if numbered
+% section headings are desired.
+\setcounter{secnumdepth}{0}
+
+\title{ProtoDRIFT: Prototype-Disentangled Deviation-Referenced Invariant Forecasting for Transferable Cross-City Anomalous Urban Flows}
+
+% Anonymous review version
+\author{Anonymous Submission}
+\affiliations{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+% 城市异常客流预测对于交通调度、公共安全和城市韧性管理具有重要意义，但异常样本稀疏且城市间分布不均，使得跨城市迁移预测仍然面临显著挑战。本文关注跨城市异常客流预测问题，即模型在源城市训练，并直接迁移到目标城市，在全量时段和异常时段上进行评估。我们提出 ProtoDRIFT，一个原型解耦的偏差参照不变预测框架。其核心思想是将城市客流分解为城市特定的正常基线和相对可迁移的异常偏差，并在偏差空间中学习可迁移异常原型，同时通过互信息约束解耦异常表示与城市特定表示。基于 NYC 与 CHI 的双向跨城市迁移实验将系统验证 ProtoDRIFT 在 full 与 anomaly 子集上的有效性，并通过消融、敏感性和可视化分析解释关键模块的作用。
+
+Forecasting anomalous urban flows is critical for traffic scheduling, public safety, and urban resilience management. However, anomalous samples are scarce and unevenly distributed across cities, which makes cross-city transfer forecasting a significant challenge. This paper focuses on cross-city anomalous urban flow forecasting, where a model is trained on a source city and directly transferred to a target city for evaluation on both full and anomalous periods. We propose ProtoDRIFT, a prototype-disentangled, deviation-referenced invariant forecasting framework. Its core idea is to decompose urban flows into a city-specific normal baseline and relatively transferable anomaly deviations, learn transferable anomaly prototypes in the deviation space, and disentangle anomaly representations from city-specific representations via a mutual information constraint. Extensive bidirectional cross-city transfer experiments between NYC and CHI demonstrate the effectiveness of ProtoDRIFT on both the full and anomaly subsets, and ablation, sensitivity, and visualization analyses further explain the roles of its key modules.
+
+\end{abstract}
+
+\input{content/1 Introduction}
+\input{content/2 Preliminaries}
+\input{content/3 The Proposed Method}
+\input{content/4 Experiment}
+\input{content/5 Related Work}
+\input{content/6 Conclusion}
+
+% aaai2027.sty automatically selects aaai2027.bst.
+\bibliography{main}
+
+% Whether an appendix may be included in the submitted PDF depends on the
+% rules of the specific AAAI-27 track. Keep this block only when permitted.
+%\appendix
+%\input{content/7 Appendix}
+
+% Uncomment only when your track requires the checklist inside the PDF.
+% \input{ReproducibilityChecklist.tex}
+
+\end{document}

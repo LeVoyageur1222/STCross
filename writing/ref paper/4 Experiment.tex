@@ -4,33 +4,40 @@
 \renewcommand\arraystretch{1.0}
 \begin{tabular}{c|c|ccc|ccc|ccc}
 \toprule
-\multirow{2}{*}{\textbf{City}}
+\multirow{2}{*}{\textbf{Setting}}
  & \multirow{2}{*}{\textbf{Method}}
  & \multicolumn{3}{c|}{\textbf{Crime}}
  & \multicolumn{3}{c|}{\textbf{Crash}}
  & \multicolumn{3}{c}{\textbf{Nightlight}} \\ \cmidrule(lr){3-5}\cmidrule(lr){6-8}\cmidrule(lr){9-11}
  &  & MAE & RMSE & PCC & MAE & RMSE & PCC & MAE & RMSE & PCC \\
 \midrule
-\multirow{7}{*}{\textbf{NYC2CHI}}
+\multirow{9}{*}{\textbf{NYC$\rightarrow$ CHI}}
+ & TS2Vec             & \underline{873.36}      & 1192.75      & 0.49   & 334.72      & 478.50      & 0.45   & 18.18      & 23.83      & 0.41 \\
  & PatchTST         & 1608.18      & 2062.95      & 0.45   & 585.96      & 735.64      & 0.50   & 21.84      & 33.49      & 0.25 \\
  & TSLANet                & 1609.46      & 2064.82      & 0.17   & 698.64      & 864.23      & 0.31   & 19.33      & 26.72      & -0.31\\
- & TimesURL                & \underline{891.21}      & 1217.53      & 0.51   & 345.86      & 491.47      & 0.45   & 18.53      & 24.91      & 0.31 \\ \cmidrule(lr){2-11}
+ & TimesURL                & 891.21      & 1217.53      & 0.51   & 345.86      & 491.47      & 0.45   & 18.53      & 24.91      & 0.31 \\ \cmidrule(lr){2-11}
  & TransGTR             & 893.54      & \underline{1135.31}      & 0.48   & 329.64      & 473.65      & 0.37   & 17.34      & 23.25      & 0.43\\
- & CrossST                 & 960.13      & 1254.25      & \underline{0.49}   & \underline{322.90}      & \underline{405.74}      & \underline{0.55}   & 17.36      & 23.37      & 0.47\\
- & CoRE                 & 1631.15      & 2082.45      & 0.17   & 569.55      & 729.45      & 0.26   & \underline{16.07}      & \underline{20.20}      & \underline{0.59}\\ \cmidrule(lr){2-11}
+ & CrossST                 & 960.13      & 1254.25      & 0.49   & 322.90      & 405.74      & 0.55   & 17.36      & 23.37      & 0.47\\
+ & CoRE                 & 1631.15      & 2082.45      & 0.17   & 569.55      & 729.45      & 0.26   & \underline{16.07}      & \underline{20.20}      & \underline{0.59}\\
+  & UrbanPG             & 947.09      & 1200.80      & \underline{0.51}   & \underline{318.97}      & \underline{399.68}      & \underline{0.59}   & 16.63      & 22.24      & 0.53\\ \cmidrule(lr){2-11}
  & MAP-STAR     & \textbf{864.53}  & \textbf{1105.60} & \textbf{0.54} & \textbf{302.97}  & \textbf{396.00}  & \textbf{0.63} & \textbf{15.61}   & \textbf{19.21}   & \textbf{0.71}\\
 \midrule
-\multirow{7}{*}{\textbf{CHI2NYC}}
+\multirow{9}{*}{\textbf{CHI$\rightarrow$NYC}}
+ & TS2Vec             & 372.61      & 524.24      & 0.35   & 81.05      & 114.23      & 0.41   & 29.08      & 48.65      & 0.50\\
  & PatchTST         & 417.68      & 603.17      & -0.17   & 95.15      & 132.91      & 0.02   & 37.77      & 51.98      & 0.42\\
  & TSLANet                & 384.10      & 537.64      & 0.33   & 87.23      & 121.09      & 0.31   & 30.67      & 49.17      & 0.47\\
  & TimesURL                & 376.06      & 536.21      & 0.29   & 79.50      & 113.65      & 0.41   & 29.39      & 47.03      & 0.48\\ \cmidrule(lr){2-11}
- & TransGTR             & 372.92      & 522.92      & 0.30   & 78.43      & 109.02      & \underline{0.48}   & 26.93      & 43.67      & 0.56\\
- & CrossST                 & \underline{369.25}      & \underline{494.47}      & \underline{0.46}   & \underline{75.47}      & \underline{106.35}      & \underline{0.48}   & \underline{26.63}      & \underline{42.88}      & \underline{0.61}\\
- & CoRE                 & 451.26      & 669.16      & 0.01   & 85.31      & 119.85      & 0.26   & 28.50      & 48.02      & 0.44\\ \cmidrule(lr){2-11}
+ & TransGTR             & 372.92      & 522.92      & 0.30   & 78.43      & 109.02      & 0.48   & 26.93      & 43.67      & 0.56\\
+ & CrossST                 & 369.25      & 494.47      & 0.46   & \underline{75.47}      & 106.35      & 0.48   & 26.63      & 42.88      & 0.61\\
+ & CoRE                 & 451.26      & 669.16      & 0.01   & 85.31      & 119.85      & 0.26   & 28.50      & 48.02      & 0.44\\
+  & UrbanPG             & \underline{357.92}      & \underline{483.76}      & \underline{0.49}   & 76.17      & \underline{104.28}      & \underline{0.55}   & \underline{25.45}      & \underline{42.76}      & \underline{0.63}\\ \cmidrule(lr){2-11}
  & MAP-STAR     & \textbf{340.79}  & \textbf{476.99}  &  \textbf{0.51}  & \textbf{73.49}  & \textbf{101.06} & \textbf{0.58} & \textbf{25.04}   & \textbf{41.06}   & \textbf{0.66}\\
 \bottomrule
 \end{tabular}
-\caption{Performance comparison with baselines in NYC2CHI and CHI2NYC cross-city scenarios on urban computing tasks.}
+\caption{
+% Performance comparison with baselines in NYC2CHI and CHI2NYC cross-city scenarios on urban computing tasks.
+Cross-city tasks comparison results. “A$\rightarrow$B” denotes that the models are trained on city A and evaluated on city B.
+}
 \label{tab:cross_city}
 \end{table*}
 
@@ -47,112 +54,47 @@ In this section, we aim to answer the following research questions through the e
     \item RQ3: Compared with traditional full-graph-based representation learning methods, can MAP-STAR’s heterogeneous subgraph sampling still capture sufficient regional information in structure and semantics?
     \item RQ4: How transferable is MAP-STAR across cities with substantially diverse geographic and cultural contexts in a broad range of downstream tasks?
     \item RQ5: How do different subgraph sampling strategies and subgraph scales affect the model’s performance?
+    \item RQ6: Do models pre-trained on different cities yield consistent representation distributions and semantic clustering in the target domain?
 \end{itemize}
 
 
 
-% \subsection{Experimental Setup}
-% \subsubsection{Datasets.} 
-
-% % 在本次实验中，我们使用了纽约（NYC）和芝加哥（CHI）两个城市的出租车数据【补充两个链接】作为预训练的交通流量数据。具体来说，我们根据US Census Bureau和CHI XXX的区域划分【补充两个链接】，以小时为单位聚合每个区域出租车的inflow和OD，生成如 \ref{tab:data_statistics} 统计的taxi inflow数据，之后在Open Street Map(OSM)收集POI数据【补充一个链接】，与前面的区域边界数据、taxi OD数据共同构建预训练所需要的采样子图G_sub。在下游任务的测试中，我们分别在NYC Open Data和CHI Open Data上收集与预训练时间跨度相同的crime crash business数据，并在NightLight Data【补充一个链接】上计算每个区域夜晚的平均灯光亮度，最终构建四个下游任务评测区域表征的效果。
-
-% We conduct experiments using taxi data from New York City (NYC) and Chicago (CHI) as pre-training sources. Regional inflow and OD statistics are aggregated hourly based on region boundaries from the NYC TLC and CHI Data Portal Community Areas. We then collect POI data from OpenStreetMap (OSM) and construct heterogeneous subgraphs $\mathcal{G}_i^{\text{sub}}$ by integrating region boundaries, taxi flows and POI distributions. For downstream tasks, we collect crime, crash, and business datasets from NYC Open Data and CHI Data Portal, along with nighttime light data from NPP-VIIRS-like NTL data~\cite{DVN/YGIVCD_2020}, all aligned with the pre-trainingng period. These support four evaluation tasks that assess the quality and transferability of the representations of the learned regions.
-
-% \subsubsection{Baselines \& Evaluating Metrics.}
-
-% We compare MAP-STAR against nine baseline models from three categories under two experimental settings. In the single-city setting, we evaluate MAP-STAR alongside traditional graph-based region representation learning methods, including HREP~\cite{HREP}, ReCP~\cite{ReCP}, and ST-ReP~\cite{ST-ReP}. In the cross-city setting, we benchmark against two additional groups: sequence-based methods that encode traffic flow sequences as region representations, including PatchTST~\cite{PatchTST}, TSLANet~\cite{TSLANet}, and TimesURL~\cite{TimesURL}; and region transfer learning methods that aim to transfer spatio-temporal knowledge from a source city to a target city, including TransGTR~\cite{TransGTR}, CrossST~\cite{CrossST}, and CoRE~\cite{CoRE}. For all regression-based tasks, we report MAE, RMSE, and PCC, where lower MAE and RMSE indicate better performance and higher PCC reflects stronger predictive alignment.
-
-% \subsubsection{Implementations.}
-
-% % 在模型的预训练阶段，我们将输入划分为patch length为2016，滑动窗口长度为168的patch序列，并计算对应时间跨度的OD矩阵进行异构子图的采样。在进行异构子图采样的过程中，我们最终的对比实验采样区域节点的二阶邻居，其中一阶邻居数量与二阶邻居数量相等且均设置为5。在下游任务评测阶段，我们则按照与预训练阶段相同的patch length设置计算区域的平均流量，同时计算区域的平均OD矩阵进行目标区域的编码。最终我们在表征维度为128维、编码本（codebook）size为128的设置下开展模型的预训练与下游任务测试。训练过程中我们使用Adam作为模型优化器，预训练阶段与下游评测阶段均设置学习率为0.001，预训练阶段设置早停模块的patience为30，下游任务评测阶段设置早停模块的patience为50，最终完成模型的预训练与评测。
-% During the pretraining stage, we segment the input into patch sequences with a patch length of 2016 and a sliding window of 168, and compute OD matrices over the corresponding time spans to support heterogeneous subgraph sampling. In the subgraph construction process, we sample second-order neighbors for each region node, with both first-order and second-order neighbor counts set to 5 to ensure a balanced local topology. In the downstream evaluation stage, we follow the same patch length setting to compute the average inflow per region and the corresponding average OD matrix for encoding the target region. All experiments are conducted with a representation dimension of 128. We adopt the Adam optimizer with a fixed learning rate of 0.001 for both pretraining and evaluation. An early stopping strategy is applied with a patience of 30 during pretraining and 50 during downstream evaluation, ensuring stable training and effective performance assessment.
-
 \subsection{Experimental Setup}
+\subsubsection{Datasets.} 
 
-\subsubsection{Datasets}
-We conduct experiments using large-scale taxi mobility data from the NYC TLC and the CHI Data Portal Community Areas, as well as POI information from OpenStreetMap (OSM). For downstream evaluation, we use crime, traffic crash, business, and nighttime light datasets~\cite{DVN/YGIVCD_2020}, all aligned with the pre-training period. Detailed descriptions are provided in Appendix~A.1.
+We conduct experiments using taxi data from New York City (NYC) and Chicago (CHI) as pre-training sources. Regional inflow and OD statistics are aggregated hourly based on region boundaries from the NYC TLC and CHI Data Portal Community Areas. We then collect POI data from OpenStreetMap (OSM) and construct heterogeneous subgraphs $\mathcal{G}_i^{\text{sub}}$ by integrating region boundaries, taxi flows and POI distributions. For downstream tasks, we collect crime, crash, and business datasets from NYC Open Data and CHI Data Portal, along with nighttime light data from NPP-VIIRS-like NTL data~\cite{DVN/YGIVCD_2020}, all aligned with the pre-trainingng period. These support four evaluation tasks that assess the quality and transferability of the representations of the learned regions.
 
-\subsubsection{Baselines}
-We compare MAP-STAR with nine representative methods under single-city and cross-city settings, including graph-based region representation models (HREP~\cite{HREP}, ReCP~\cite{ReCP}, ST-ReP~\cite{ST-ReP}), sequence-based methods (PatchTST~\cite{PatchTST}, TSLANet~\cite{TSLANet}, TimesURL~\cite{TimesURL}), and region transfer learning approaches (TransGTR~\cite{TransGTR}, CrossST~\cite{CrossST}, CoRE~\cite{CoRE}). Baseline configurations follow the original implementations (Appendix~A.2).
+\subsubsection{Baselines \& Evaluating Metrics.}
 
-\subsubsection{Evaluating Metrics}
-All tasks are evaluated using MAE, RMSE, and PCC, where lower values indicate better performance.
+We compare MAP-STAR against eleven baselines from three categories under two experimental settings. In the single-city setting, we evaluate MAP-STAR alongside traditional graph-based region representation learning methods, including HREP~\cite{HREP}, ReCP~\cite{ReCP}, and ST-ReP~\cite{ST-ReP}. In the cross-city setting, we benchmark against two additional groups: sequence-based methods that encode traffic flow sequences as region representations, including TS2Vec\cite{TS2Vec}, PatchTST~\cite{PatchTST}, TSLANet~\cite{TSLANet}, and TimesURL~\cite{TimesURL}; and region transfer learning methods that aim to transfer spatio-temporal knowledge from a source city to a target city, including TransGTR~\cite{TransGTR}, CrossST~\cite{CrossST}, CoRE~\cite{CoRE} and UrbanPG~\cite{UrbanPG}. For all regression-based tasks, we report MAE, RMSE, and PCC, where lower MAE and RMSE indicate better performance and higher PCC reflects stronger predictive alignment.
 
-\subsubsection{Implementations}
-MAP-STAR is trained using a pre-training and transfer paradigm with fixed-length patch encoding and heterogeneous subgraph sampling. During transfer, only lightweight task-specific predictors are trained. Implementation details and hyperparameters are reported in Appendix~A.3.
+\subsubsection{Implementations.}
 
-
-\subsection{Performance Comparison (RQ1)}
-% In this section, 我们在single-city和cross-city两个setting下与三类baseline进行对比实验。如表 \ref{tab:cross_city} 所示，在cross-city的表示迁移中，传统的时间序列表示方法在绝大多数指标上均弱于迁移学习方法，这是因为不同城市的人口流量具有不同的trend和pattern，仅在源城市上进行预训练难以拟合目标城市的人口流动模式。Graph Transfer Learning方法在此基础上引入迁移对齐模块，能够从一定程度上解决这个问题。但是这类方法忽视了不同城市间图结构的差异，故在迁移过程中依然存在信息损失与扭曲。而MAP-STAR取得了robust and superior performance. 这体现了我们提出方法在不同城市的不同任务上能够捕获可迁移的图结构、城市语义和人口流动（flow）信息。
-% 此外我们同样将我们的方法在single-city setting下与区域表示学习的SOTA方法进行比较。表 \ref{tab:single_city} 显示，MAP-STAR在绝大多数指标上均达到了最优，说明基于多视角采样异质子图在学习区域表征的有效性，为图表示学习的轻量化研究提供了一种全新的思路。
-% In this section, we conduct comparative experiments in cross-city settings against two categories of baselines. From the result show in Table~\ref{tab:cross_city}, we observe that:
-% \begin{itemize}
-%     % Traditional time-series representation methods generally perform worse than transfer learning methods. This is primarily because human mobility patterns exhibit city-specific trends and fluctuations, making it difficult for models pretrained solely on the source city to generalize effectively to the target city. 而从跨任务的比较来看，这类方法在crash任务上的表现总体上优于crime和nightlight两个任务，这是由于crash任务本身和车流量相关性更高，而crime任务和nightlight任务本身和POI、经济发展水平等区域属性更为相关，这从侧面说明建模区域间异质图结构与交互的必要性。
-%     \item Traditional time-series representation models consistently lag behind existing region transfer-learning approaches. The main reason is that human mobility are highly city-specific. Representations trained only on a source city struggle to generalise to a different urban context. A cross-task comparison further reveals that such baselines fare relatively better on the crash prediction task than on crime or nightlight. Traffic accidents are driven largely by traffic volume patterns that classic temporal models can still capture. Whereas crime incidence and nocturnal luminosity are more closely tied to region functional properties like POI distributions. This contrast underscores the necessity of modelling heterogeneous inter-regional graph structures and their interactions when modeling transferable region representations.
-%     % Graph transfer learning methods 在下游任务上的整体表现优于traditional time-series representation methods. 针对后者难以捕获区域间人口流动关系的不足，TransGTR基于区域节点流量的相似度生成邻接图，使得模型可以捕获区域交互的partial信息。CrossST在此基础上进一步捕获traffic flow在temporal维度和spatial维度的固定模式。这些设计弥补了traditional time-series representation methods在序列模式迁移和图结构建模方面的不足。但是仅利用单一的traffic flow数据源，同时忽视不同区域图结构的差异依然限制这类方法representation的表示能力。
-    
-%     \item Graph-based transfer-learning methods outperform traditional time-series representation models on most downstream tasks. To compensate for the latter’s inability to capture interregional mobility, TransGTR constructs an adjacency graph of flow similarities, allowing the model to learn part of the interaction patterns between regions. CrossST goes a step further by explicitly modelling recurrent traffic-flow regularities along both the temporal and spatial dimensions. These designs alleviate the limitations of conventional time-series approaches in sequence-pattern transfer and graph-structure modelling. However, relying solely on traffic flow data and ignoring structural heterogeneity between regions still constrains the expressive power of the representations.
-
-%     % The proposed MAP-STAR achieves robust and superior performance among all baselines. 这说明我们提出的方法能够很好地建模Muti-View的区域间的图上交互信息，使得模型学到更富含区域多种语义的表示。相比于CrossST在不同城市间各异的Spatial维度上使用固定的编码，我们通过Heterogeneous Subgraph Sampler在不同城市上采样固定的子图结构，使得捕获的multi-view pattern更加稳定，这进一步提升了我们模型的表现。
-%     \item The proposed MAP-STAR consistently outperforms all baselines, demonstrating its ability to model multi-view inter-regional interactions and learn representations rich in diverse regional semantics. Unlike CrossST, which applies a fixed spatial encoding across cities' different spatial dimensions, MAP-STAR employs a heterogeneous subgraph sampler to extract identical subgraph structures in both cities. This stabilises the captured multi-view patterns and further boosts the model’s overall performance.
-% \end{itemize}
-
-In this section, we conduct comparative experiments in cross-city settings against two categories of baselines. From the results shown in Table~\ref{tab:cross_city}, we make the following observations:
-\begin{itemize}
-    \item Traditional time-series representation models consistently underperform region transfer-learning approaches in cross-city settings. This is largely because human mobility is highly city-specific, making representations trained on a single source city difficult to generalize to a different urban context. Across tasks, these methods perform relatively better on crash prediction than on crime or nightlight estimation, as traffic accidents are more directly correlated with traffic volume patterns that temporal models can capture. In contrast, crime incidence and nighttime luminosity are more closely associated with region-level functional attributes, highlighting the importance of modeling heterogeneous inter-regional structures and interactions.
+We implement MAP-STAR using the Adam optimizer with a fixed learning rate of 0.001 and a representation dimension of 128. During pretraining, we segment the input into patch sequences with a patch length of 2016 and a sliding window of 168. For subgraph construction, we sample second-order neighbors for each region node, with both first-order and second-order neighbor counts set to 5 to ensure a balanced local topology. An early stopping strategy is applied with a patience of 30 during pretraining and 50 during downstream evaluation. Detailed hyperparameter settings are provided in the Appendix.
 
 \begin{figure}[!htbp]
    \centering
-    \includegraphics[width=0.48\textwidth]{FormattingGuidelines-IJCAI-ECAI-26/fig/ablation.png} % Reduce the figure size so that it is slightly narrower than the column.
+    \includegraphics[width=0.50\textwidth]{fig/ablation.png} % Reduce the figure size so that it is slightly narrower than the column.
     \caption{Ablation Study of the proposed MAP-STAR.}
     \label{fig:ablation}
 \end{figure}
 
-    \item Graph-based transfer-learning methods generally outperform traditional time-series baselines by explicitly incorporating inter-regional relationships. For example, TransGTR constructs adjacency graphs based on flow similarity to capture partial mobility interactions, while CrossST further models recurrent traffic-flow patterns across temporal and spatial dimensions. Although these designs alleviate the limitations of sequence-only representations, relying solely on traffic flow signals and overlooking structural heterogeneity across cities still constrains their expressive capacity.
+\subsection{Performance Comparison (RQ1)}
 
-    \item MAP-STAR consistently achieves the best performance across all tasks and transfer settings. This improvement demonstrates the effectiveness of modeling multi-view inter-regional interactions to learn semantically rich region representations. Unlike CrossST, which applies fixed spatial encodings across cities, MAP-STAR leverages a heterogeneous subgraph sampler to extract consistent subgraph structures across different urban graphs. This design yields more stable multi-view patterns and leads to superior transfer performance.
+In this section, we conduct comparative experiments in cross-city settings against two categories of baselines. From the result show in Table~\ref{tab:cross_city}, we observe that:
+\begin{itemize}
+
+    \item Traditional time-series representation models consistently lag behind existing region transfer-learning approaches. The main reason is that human mobility are highly city-specific. Representations trained only on a source city struggle to generalise to a different urban context. A cross-task comparison further reveals that such baselines fare relatively better on the crash prediction task than on crime or nightlight. Traffic accidents are driven largely by mobility patterns that classic temporal models can still capture. Whereas crime and nocturnal luminosity are more closely tied to region functional properties like POI distributions. This contrast underscores the necessity of modelling heterogeneous inter-regional graph structures and their interactions when modeling transferable region representations.
+    
+    \item Graph-based transfer-learning methods outperform traditional time-series representation models on most downstream tasks. To compensate for the latter’s inability to capture interregional mobility, TransGTR constructs an adjacency graph of flow similarities, allowing the model to learn part of the interaction patterns between regions. CrossST goes a step further by explicitly modelling recurrent traffic-flow regularities along both the temporal and spatial dimensions. These designs alleviate the limitations of conventional time-series approaches in sequence-pattern transfer and graph-structure modelling. However, relying solely on traffic flow data and ignoring structural heterogeneity between regions still constrains the expressive power of the representations.
+
+    \item The proposed MAP-STAR consistently outperforms all baselines, demonstrating its ability to model multi-view inter-regional interactions and learn representations rich in diverse regional semantics. Unlike CrossST, which applies a fixed spatial encoding across cities' different spatial dimensions, MAP-STAR employs a heterogeneous subgraph sampler to extract identical subgraph structures in both cities. This stabilises the captured multi-view patterns and further boosts the model’s overall performance.
 \end{itemize}
-
-\subsection{Ablation Study (RQ2)}
-% 为了验证MAP-STAR模块设计的有效性，我们在CHI2NYC的实验设置下对比了以下三个模型变体在不同任务上RMSE的表现：(1) w/o FFT, 在时间编码过程中未使用傅里叶变换与逆变换提取序列模式；(2) w/o MRGCN，在图消息传播时仅基于地理邻居进行传播，未使用MRMP(Multi-Relation Message Passing)；(3) w/o MVPBA，将经过MRMP得到的表征直接用于预训练的重构。如图 \ref{fig:ablation} 结果所示，MAP-STAR outperforms all ablated variants。去除MRMP模块使得节点难以捕获与其有语义相似或人口交流密切的非邻居节点的message，降低模型的表示效果。去除MVPBA模块则降低模型可迁移性，使其在跨城市任务测试中表现下降。此外，在Time Encoder中加入FFT模块更有助于编码器捕获一般性的人口流动周期与trend信息，增强模型的迁移效果。
-% To assess the contribution of each component in MAP-STAR, we conduct an ablation study under the CHI2NYC transfer setting. We compare three reduced variants in terms of RMSE: (1) w/o FFT, which omits Fourier transform and inverse transform during temporal encoding; (2) w/o MRGCN, which restricts message passing to geographic neighbors only and removes the multi-relation message-passing (MRMP) mechanism; and (3) w/o MVPBA, which feeds the representations produced by MRGCN directly into the reconstruction decoder, bypassing the multi-view predictive bidirectional alignment (MVPBA) module.
-
-% As illustrated in Fig. \ref{fig:ablation}, MAP-STAR consistently outperforms all ablated variants, demonstrating the necessity of the full architecture. Removing MRMP prevents nodes from aggregating messages from semantically similar or mobility-connected but geographically distant nodes, thereby degrading representation quality. Eliminating MVPBA weakens cross-domain alignment and regularization, which lowers performance on cross-city tasks. Moreover, incorporating FFT filtering in the Time Encoder enables the model to capture generic mobility cycles and long-term trends, further enhancing robustness and accuracy in transfer scenarios.
-
-To assess the contribution of individual components in MAP-STAR, we performed an ablation study in the CHI2NYC transfer setting and used RMSE as the evaluation metric: (1) \textit{w/o FFT}, which removes Fourier-based temporal filtering; (2) \textit{w/o MRGCN}, which disables multi-relation message passing and restricts aggregation to geographic neighbors; and (3) \textit{w/o MVPBA}, which bypasses the MVPBA module and directly feeds MRGCN outputs to the decoder.
-
-As shown in Fig.~\ref{fig:ablation}, the full MAP-STAR model consistently outperforms all ablated variants, highlighting the necessity of each component. Removing multi-relation message passing limits information aggregation from functionally or mobility-related but geographically distant regions, leading to degraded representations. Eliminating MVPBA weakens cross-domain alignment and regularization, resulting in inferior transfer performance. In addition, FFT-based temporal filtering in the Time Encoder helps capture generic mobility cycles and long-term trends, further improving robustness under cross-city distribution shifts.
-
-
-
-
-% \begin{table}[htbp]
-% \centering
-% \caption{Impact of different sampling strategies on three NYC prediction tasks. Best results are in \textbf{bold}; second–best are \underline{underlined}.}
-% \label{tab:sampling_strategies}
-% \setlength{\tabcolsep}{3.5pt}
-% \renewcommand\arraystretch{1.0}
-% \begin{tabular}{c|cc|cc|cc}
-% \toprule
-% Task & \multicolumn{2}{c|}{\textbf{crime}} & \multicolumn{2}{c|}{\textbf{crash}} & \multicolumn{2}{c}{\textbf{nightlight}} \\
-% \midrule
-% Metrics & MAE & RMSE & MAE & RMSE & MAE & RMSE \\
-% \midrule
-% OD & 433.36 & 599.54 & 95.12 & 128.61 & 31.96 & 48.95 \\
-% POI  & 456.19 & 606.97 & 90.88 & 118.73 & \underline{28.17} & \underline{43.14} \\
-% Neighbor  & \underline{386.28} & \underline{543.96} & \underline{80.22} & \underline{110.59} & 31.40 & 44.35 \\
-% Mix  & \textbf{340.79} & \textbf{476.99} & \textbf{73.49} & \textbf{101.06} & \textbf{25.04} & \textbf{41.06} \\
-% \bottomrule
-% \end{tabular}
-% \end{table}
-
-
-\subsection{Effectiveness for Sub-Graph Modeling (RQ3)}
 
 \begin{table}[htbp]
 \centering
-\setlength{\tabcolsep}{2.5pt}
-\renewcommand\arraystretch{1.0}
+\setlength{\tabcolsep}{2.75pt}
+\renewcommand\arraystretch{1.31}
 \begin{tabular}{c|cc|cc|cc}
 \toprule
 Task & \multicolumn{2}{c|}{\textbf{Crime}} & \multicolumn{2}{c|}{\textbf{Crash}} & \multicolumn{2}{c}{\textbf{Nightlight}} \\
@@ -169,23 +111,34 @@ MAP-STAR  & \textbf{334.92} & \textbf{461.22} & \textbf{64.14} & \textbf{91.10} 
 \label{tab:single_city}
 \end{table}
 
-% To examine whether heterogeneous subgraph sampling can rival—or even surpass—conventional full-graph training in a single-city context, we conduct a focused study on the New York City (NYC) dataset. Specifically, we compare MAP-STAR with three state-of-the-art region-representation baselines: HREP\cite{HREP}, ReCP\cite{ReCP}, and ST-ReP\cite{ST-ReP}. The training pipeline for MAP-STAR mirrors the cross-city protocol; the sole alteration is that both the pre-training and fine-tuning phases are executed exclusively on NYC data.
+\subsection{Ablation Study (RQ2)}
 
-% The results in Table~\ref{tab:single_city} reveal a consistent advantage for MAP-STAR.  These gains confirm that sampling multiple small, semantically-complementary subgraphs is sufficient to capture rich regional semantics, even when the global graph is fully accessible.  We attribute the improvements to two factors: (i) heterogeneous views allow the model to focus on neighbourhood, POI similarity and flow-based interactions separately, avoiding the noise of a monolithic graph; and (ii) the pattern-bank adapter re-uses structural motifs shared across views, yielding more compact yet expressive representations.  Collectively, the single-city study demonstrates that MAP-STAR is not only transferable but also a lightweight and generalizable alternative to full-graph encoders for urban region representation learning.
+To assess the contribution of each component in MAP-STAR, we conduct an ablation study under the CHI$\rightarrow$NYC transfer setting. We compare three reduced variants in terms of RMSE: (1) w/o FFT, which omits Fourier transform and inverse transform during temporal encoding; (2) w/o MRGCN, which restricts message passing to geographic neighbors only and removes the multi-relation message-passing (MRMP) mechanism; and (3) w/o MVPBA, which feeds the representations produced by MRGCN directly into the reconstruction decoder, bypassing the multi-view predictive bidirectional alignment (MVPBA) module.
+
+As illustrated in Figure \ref{fig:ablation}, MAP-STAR consistently outperforms all ablated variants, demonstrating the necessity of the full architecture. Removing MRMP prevents nodes from aggregating messages from semantically similar or mobility-connected but geographically distant nodes, thereby degrading representation quality. Eliminating MVPBA weakens cross-domain alignment and regularization, which lowers performance on cross-city tasks. Moreover, incorporating FFT filtering in the Time Encoder enables the model to capture generic mobility cycles and long-term trends, further enhancing robustness and accuracy in transfer scenarios.
 
 
-To examine whether heterogeneous subgraph sampling can serve as an effective alternative to full-graph training in a single-city setting, we conduct a controlled study on the New York City (NYC) dataset. MAP-STAR is compared with three representative region representation methods, HREP~\cite{HREP}, ReCP~\cite{ReCP}, and ST-ReP~\cite{ST-ReP}. The training pipeline follows the same protocol as in the cross-city setting, except that both pre-training and evaluation are performed on NYC.
+\subsection{Effectiveness for Sub-Graph Modeling (RQ3)}
 
-As shown in Table~\ref{tab:single_city}, MAP-STAR consistently outperforms all baselines. These results indicate that learning from heterogeneous subgraphs is sufficient to capture rich regional semantics, even when the full city graph is available. By decoupling geographic, functional, and mobility interactions and reusing shared structural motifs via the pattern-bank adapter, MAP-STAR yields compact yet expressive representations, demonstrating its effectiveness as a lightweight alternative to full-graph encoders.
+To examine whether heterogeneous subgraph sampling can rival—or even surpass—conventional full-graph training in a single-city context, we conduct a focused study on the New York City (NYC) dataset. Specifically, we compare MAP-STAR with three state-of-the-art region-representation baselines: HREP\cite{HREP}, ReCP\cite{ReCP}, and ST-ReP\cite{ST-ReP}. The training pipeline for MAP-STAR mirrors the cross-city protocol; the sole alteration is that both the pre-training and fine-tuning phases are executed exclusively on NYC data.
 
+The results in Table~\ref{tab:single_city} reveal a consistent advantage for MAP-STAR.  These gains confirm that sampling multiple small, semantically-complementary subgraphs is sufficient to capture rich regional semantics, even when the global graph is fully accessible.  We attribute the improvements to two factors: (i) heterogeneous views allow the model to focus on neighbourhood, POI similarity and flow-based interactions separately, avoiding the noise of a monolithic graph; and (ii) the pattern-bank adapter re-uses structural motifs shared across views, yielding more compact yet expressive representations.  Collectively, the single-city study demonstrates that MAP-STAR is not only transferable but also a lightweight and generalizable alternative to full-graph encoders for region representation learning.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.99\textwidth]{fig/visualization_v3.png} % Reduce the figure size so that it is slightly narrower than the column.
+% 
+\caption{Representation Visualization Results in both single-city and cross-city settings.}
+\label{fig:vr2}
+\end{figure*}
 
 \begin{table}[htbp]
 \centering
 \setlength{\tabcolsep}{2.8pt}
-\renewcommand\arraystretch{1.0}
+\renewcommand\arraystretch{1.25}
 \begin{tabular}{c|ccc|ccc}
 \toprule
-City & \multicolumn{3}{c|}{\textbf{CHI2NYC}} & \multicolumn{3}{c}{\textbf{CHI2CD}} \\
+Setting & \multicolumn{3}{c|}{\textbf{CHI$\rightarrow$NYC}} & \multicolumn{3}{c}{\textbf{CHI$\rightarrow$CD}} \\
 \midrule
 Metrics & MAE & RMSE & PCC & MAE & RMSE & PCC \\
 \midrule
@@ -194,34 +147,31 @@ CrossST  & 16.39 & 22.71 & 0.52 & 214.99 & 338.54 & 0.68 \\
 MAP-STAR & \textbf{14.36} & \textbf{18.05} & \textbf{0.58} & \textbf{196.40} & \textbf{307.03} & \textbf{0.77} \\
 \bottomrule
 \end{tabular}
-\caption{Generalization performance across heterogeneous cities.}
+\caption{Generalization performance across cities.}
 \label{tab:generalization}
 \end{table}
 
 \subsection{Generalization in Cross-City Transfer (RQ4)}
 
-% To evaluate the transferability of MAP-STAR under heterogeneous geographic and cultural contexts and broader downstream tasks, we conduct experiments in a challenging cross-city setting. We consider business POI count prediction as the downstream task, where models are pre-trained on Chicago (CHI) and evaluated on New York City (NYC) and Chengdu (CD). Notably, Chengdu differs substantially from the source city in urban scale, POI distributions, and mobility patterns, providing a more heterogeneous transfer scenario. For comparison, we report results of MAP-STAR against two strong baselines, TransGTR and CrossST, with performance summarized in Table~\ref{tab:generalization}.
-
-
-% As shown in the results, MAP-STAR consistently outperforms the compared baselines across all metrics and transfer settings, demonstrating superior generalization ability. In particular, TransGTR exhibits a clear performance degradation in the CHI2CD setting, suggesting that traditional distillation-based transfer learning struggles under substantial graph structure and distribution shifts. In contrast, MAP-STAR benefits from heterogeneous subgraph sampling and the multi-view structural pattern bank, enabling more robust transferable representations across cities with diverse urban characteristics.
-
 To further evaluate the transferability of MAP-STAR under heterogeneous urban conditions and a broader downstream task, we conduct a challenging cross-city generalization study. We consider business POI count prediction as the downstream task, where models are pre-trained on Chicago (CHI) and evaluated on New York City (NYC) and Chengdu (CD). Compared with CHI, Chengdu exhibits substantial differences in urban scale, POI distributions, and mobility patterns, resulting in a more heterogeneous transfer scenario. We report results for MAP-STAR and two strong baselines, TransGTR and CrossST, in Table~\ref{tab:generalization}.
 
-As shown in the results, MAP-STAR consistently outperforms the baselines across all transfer settings, indicating stronger generalization under cross-city distribution shifts. In particular, TransGTR shows a pronounced performance drop in the CHI$\rightarrow$CD setting, suggesting that distillation-based transfer becomes less robust when graph structures and data distributions differ substantially. In contrast, MAP-STAR leverages heterogeneous subgraph sampling and a multi-view structural pattern bank to learn more stable and transferable representations across diverse urban graphs.
+As shown in the results, MAP-STAR consistently outperforms the baselines across all transfer settings, indicating stronger generalization under cross-city distribution shifts. In particular, TransGTR shows a pronounced performance drop in the CHI$\rightarrow$CD setting, suggesting that distillation-based transfer becomes less robust when graph structures and data distributions differ substantially. CrossST yields more stable results yet still falls short of MAP-STAR, particularly under the more challenging CHI$\rightarrow$CD scenario. In contrast, MAP-STAR leverages heterogeneous subgraph sampling and a multi-view structural pattern bank to capture reusable structural patterns rather than city-specific features, thereby learning more stable and transferable representations across diverse urban graphs.
 
 \begin{figure}[!htbp]
    \centering
-    \includegraphics[width=0.485\textwidth]{FormattingGuidelines-IJCAI-ECAI-26/fig/graph_sampler.png} % Reduce the figure size so that it is slightly narrower than the column.
+    \includegraphics[width=0.485\textwidth]{fig/graph_sampler.png} % Reduce the figure size so that it is slightly narrower than the column.
     \caption{Empirical results on different sampling settings.}
     \label{fig:graphsample}
 \end{figure}
 
 \subsection{Experiments for Subgraph Sampler (RQ5)}
 
-% 为了进一步探究Heterogeneous Subgraph Sampler的作用，我们在CHI2NYC的迁移实验中测试不同子图采样策略和子图采样规模的效果。其中OD表示仅根据区域间人口流动强度采样子图、POI表示根据区域POI间相似度采样子图、Neighbor仅采样区域地理邻接节点子图，Mix则采用异质混合子图。如图Fig \ref{fig:graphsample} 的(a)~(c)所示，采用Mix策略采样子图能够取得最好的效果，证明异质子图采样能够使得模型从不同视角聚合节点表征，推动表征具有更丰富的语义。此外，与Crime和Crash任务不同，Nightlight任务中采用POI子图采样的效果达到次优，这可能是因为夜间灯光亮度更与区域属性相关，这说明不同下游任务可能会给各个子图采样策略提供不同的关注。之后我们也探究子图采样规模对模型效果的影响，子图规模为k代表共采样邻居规模为k的二阶邻居。如图Fig \ref{fig:graphsample} 的(d)所示，模型效果在子图规模为4-5之间达到了最好。这显示过小的子图规模会导致模型难以获取充足的邻居信息，而过大的子图规模会给训练带来更多噪声。我们最终的实验均在子图规模为5上进行。
-% We conduct an extensive experiment to explore the influence of different subgraph sampling strategies and scales on the CHI2NYC transfer scenario. Specifically, the OD strategy samples subgraphs solely on the basis of interregional population flows, POI relies on the similarity of points-of-interest distributions, Neighbor extracts purely geographic adjacent nodes, whereas Mix assembles a heterogeneous blend of the three. As illustrated in Fig. \ref{fig:graphsample}(a)–(c), the Mix strategy consistently yields the best performance, confirming that heterogeneous subgraphs allow the model to aggregate node representations from complementary perspectives and thus endow them with richer semantics. A noteworthy exception arises in the Nightlight task, where POI sampling produces the second-best scores, implying that nocturnal light intensity is more tightly coupled to intrinsic regional attributes than to mobility or adjacency. This observation further suggests that different downstream tasks may favour distinct sampling views. We further analyze the impact of subgraph size, where a scale of $k$ refers to sampling up to $k$ neighbors at each hop within a two-hop neighborhood. Fig. \ref{fig:graphsample}(d) reveals an optimal window in $k=4$-$5$: smaller subgraphs do not provide sufficient contextual information, whereas larger ones introduce excessive noise. Consequently, all the above experiments adopt a subgraph scale of $k=5$.
+We conduct an extensive study to examine how different subgraph sampling strategies and subgraph scales affect performance under the CHI$\rightarrow$NYC transfer setting. Specifically, the \textit{OD} strategy samples subgraphs solely based on inter-regional population flows, \textit{POI} relies on similarity in points-of-interest distributions, \textit{Neighbor} considers only geographically adjacent regions, while \textit{Mix} combines all three views into a heterogeneous subgraph.
 
-We conduct an extensive study to examine how different subgraph sampling strategies and subgraph scales affect performance under the CHI$\rightarrow$NYC transfer setting. Specifically, the \textit{OD} strategy samples subgraphs solely based on inter-regional population flows, \textit{POI} relies on similarity in points-of-interest distributions, \textit{Neighbor} considers only geographically adjacent regions, while \textit{Mix} combines all three views into a heterogeneous subgraph. As shown in Fig.~\ref{fig:graphsample}(a)–(c), the \textit{Mix} strategy consistently achieves the best performance, indicating that heterogeneous subgraphs enable the model to aggregate complementary relational signals and learn richer region semantics. An exception is observed in the Nightlight task, where POI-based sampling yields the second-best results, suggesting that nighttime luminosity is more strongly associated with intrinsic regional attributes than with mobility patterns or spatial adjacency. This observation further implies that different downstream tasks may favor different relational views. We also analyze the effect of subgraph scale, where $k$ denotes the number of sampled neighbors per hop within a two-hop neighborhood. As illustrated in Fig.~\ref{fig:graphsample}(d), performance peaks when $k$ lies in the range of 4–5: smaller subgraphs provide insufficient contextual information, whereas larger ones tend to introduce excessive noise. Based on these results, we set the subgraph scale to $k=5$ in all experiments.
+As shown in Figure \ref{fig:graphsample}(a)–(c), the \textit{Mix} strategy consistently achieves the best performance, indicating that heterogeneous subgraphs enable the model to aggregate complementary relational signals and learn richer region semantics. An exception is observed in the Nightlight task, where POI-based sampling yields the second-best results, suggesting that nighttime luminosity is more strongly associated with intrinsic regional attributes than with mobility patterns or spatial adjacency. This observation further implies that different downstream tasks may favor different relational views. We also analyze the effect of subgraph scale, where $k$ denotes the number of sampled neighbors per hop within a two-hop neighborhood. As illustrated in Figure \ref{fig:graphsample}(d), performance peaks when $k$ lies in the range of 4–5: smaller subgraphs provide insufficient context, whereas larger ones tend to introduce excessive noise. Based on these results, we set the subgraph scale to $k=5$ in all experiments.
 
+\subsection{Representation Visualization (RQ6)}
 
+To further examine the quality of the representations learned by MAP-STAR, we visualize region embeddings obtained under both single-city and cross-city settings. Specifically, MAP-STAR is pre-trained on NYC and CHI, and embeddings are extracted from models trained on NYC alone as well as models transferred from CHI to NYC. These embeddings are then projected into a two-dimensional space using dimensionality reduction techniques for qualitative comparison. To assess whether heterogeneous subgraph sampling enables the model to capture urban semantics from multiple complementary views, we visualize the embeddings colored by four region-level labels that reflect distinct urban properties: most frequent POI category, population flow intensity, latitude, and longitude.
 
+The results are shown in Figure \ref{fig:vr2}. After dimensionality reduction, embeddings associated with different labels form clearly separated clusters, indicating that MAP-STAR effectively encodes functional similarity, mobility dynamics, and geographic proximity into a unified representation space without conflating these distinct semantic dimensions. Moreover, embedding distributions under different training settings exhibit consistent structures on the same target city. For instance, in both the "NYC" and "CHI$\rightarrow$NYC" settings, longitude-colored visualizations reveal a similar outlying cluster corresponding to geographically extreme regions. The preservation of such fine-grained spatial structures demonstrates that MAP-STAR learns transferable region representations that capture stable urban characteristics regardless of the pre-training source city, highlighting its robustness under cross-city distribution shifts.
