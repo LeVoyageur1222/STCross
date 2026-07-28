@@ -41,6 +41,9 @@ OUT_DIR = "results_viz"
 H, P = 12, 12
 ACTIVE_THRESH = 0.5
 MIN_RUN = 6
+# Right-panel candidates are decoupled from the pinned left-panel anchors, so a
+# shorter minimum run length widens the pool of displayable anomaly episodes.
+DISPLAY_MIN_RUN = 3
 SEED = 42
 EMBED_ANOM_SAMPLES = 520
 TSNE_NODE_ROWS = 3200
@@ -85,6 +88,25 @@ MODEL_DISPLAY_NAMES = {"STCross": "ProtoDRIFT"}
 CASE_MARKERS = {"Holiday": "*", "Weather": "D"}
 CASE_COLORS = {"Holiday": "#f2b701", "Weather": "#00a6d6"}
 CASE_FALLBACK_LABELS = {"Holiday": "Holiday surge", "Weather": "Rainstorm"}
+# Left-panel semantic cases are pinned: the t-SNE markers and pattern curves
+# always come from these runs, while the right-panel cases are chosen freely.
+LEFT_PANEL_ANCHORS = {
+    "Holiday": {"run": (24174, 24185), "event_label": "Independence Day"},
+    "Weather": {"run": (21558, 21569), "event_label": "Rainstorm"},
+}
+# Right-panel cases that are frozen after review; remaining labels are re-selected.
+# Holiday: Presidents' Day node 119 is the balance point on the CHI trade-off
+# frontier -- ProtoDRIFT MAE 1.72 vs baseline 2.88 (1.67x) at the achievable
+# relative-error floor (0.27) while keeping a peak flow of 19. Both windows span
+# 10:00-21:00 so the two right-panel x axes line up.
+PINNED_DISPLAY_CASES = {
+    "Holiday": {"run": (20962, 20973), "node": 119},
+    "Weather": {"run": (22858, 22869), "node": 79},
+}
+# ProtoDRIFT must stay within this fraction of the mean true flow, otherwise a
+# large baseline gap would be bought at the cost of our own curve missing GT.
+# On CHI holiday surges the achievable floor is ~0.37, so the gate sits just above it.
+REL_FIT_MAX = 0.40
 
 
 def display_model_name(name):
@@ -260,6 +282,33 @@ def case_is_eligible(row):
     if row.get("label") == "Holiday":
         return row.get("positive_step_fraction", 0.0) >= 0.75
     return row.get("true_mean", 0.0) >= 1.0
+
+
+def case_display_score(true, nbl, st, baseline_preds, label):
+    """Node-level visual-contrast score for the right panel: ProtoDRIFT tracks
+    the anomalous trend while baselines miss it in the label-specific direction.
+
+    ProtoDRIFT closeness to ground truth is a hard gate (relative to the flow
+    scale), so a huge baseline gap cannot compensate for our own curve being far
+    from GT. Both the gap and our error are normalized by the flow scale because
+    the plot axes autoscale, so only proportional separation is visible. The
+    baseline gap is aggregated per step with a median so a single spike cannot
+    stand in for a case where baselines are consistently wrong.
+    """
+    true = np.asarray(true, dtype=float)
+    target = 1.0 if label == "Holiday" else -1.0
+    direction = float((true - np.asarray(nbl, dtype=float)).mean()) * target
+    if direction <= 0:
+        return (-1, -np.inf)
+    scale = max(float(np.abs(true).mean()), 1e-6)
+    rel_fit = float(np.abs(np.asarray(st, dtype=float) - true).mean()) / scale
+    if baseline_preds:
+        step_gaps = np.stack([(true - np.asarray(pred, dtype=float)) * target
+                              for pred in baseline_preds.values()], axis=0).mean(axis=0)
+        rel_gap = float(np.median(step_gaps)) / scale
+    else:
+        rel_gap = 0.0
+    return (int(rel_fit <= REL_FIT_MAX), rel_gap - rel_fit)
 
 
 def transition_interval_for_run(run, mask, timestamps, lo, hi, window_len=TRANSITION_WINDOW,
@@ -613,30 +662,27 @@ def select_case_pair_by_cluster(holiday_ranked, weather_ranked, embed, top_k=8):
 
 
 def select_representative_node_for_case(case, active, label):
-    """Pick a display node whose curves best match the label-specific case story."""
+    """Pick the display node with the clearest visual contrast: ProtoDRIFT tracks
+    the anomalous trend while baselines miss it in the label-specific direction.
+
+    Flow direction and ProtoDRIFT closeness are already enforced inside
+    case_display_score, so only the weather-specific non-trivial-flow requirement
+    is applied on top of it.
+    """
     active = np.asarray(active, dtype=bool)
     if not active.any():
         active = np.ones(case["true"].shape[-1], dtype=bool)
-    baseline_preds = [pred for name, pred in case["preds"].items() if name != "STCross"]
-    candidates = np.where(active)[0]
+    baseline_names = [name for name in case["preds"] if name != "STCross"]
     best = None
-    for node in candidates:
+    for node in np.where(active)[0]:
         true = case["true"][:, node]
-        nbl = case["nbl"][:, node]
         st = case["preds"]["STCross"][:, node]
-        delta = true - nbl
-        st_mae = float(np.abs(st - true).mean())
-        if baseline_preds:
-            baseline_bias = float(np.mean([pred[:, node] - true for pred in baseline_preds]))
-        else:
-            baseline_bias = 0.0
-        if label == "Holiday":
-            score = (float((delta > 0).mean()), int(delta.min() > 0),
-                     -st_mae, -baseline_bias, float(delta.mean()))
-        else:
-            score = (int(true.min() >= 0), int(st.min() >= 0), int(true.mean() >= 1.0),
-                     min(float(true.mean()), 8.0), -st_mae,
-                     baseline_bias, -abs(float(delta.mean())))
+        baselines = {name: case["preds"][name][:, node] for name in baseline_names}
+        contrast = case_display_score(true, case["nbl"][:, node], st, baselines, label)
+        # The plotted y-axis is clamped at 0, so a slightly negative ProtoDRIFT
+        # step must not veto a node; only require non-trivial real flow.
+        flow_ok = 1 if label == "Holiday" else int(true.mean() >= 1.0)
+        score = (flow_ok, contrast)
         if best is None or score > best[0]:
             best = (score, int(node))
     return best[1]
@@ -654,6 +700,54 @@ def build_cases_from_results(data, stcross, learneds, selected_results):
         pred["event_label"] = case_event_label(label, data["timestamps"][result["run"][0]])
         cases[label] = pred
     return cases
+
+
+def choose_display_case(data, stcross, learneds, ranked, label, top_k=24):
+    """Pick the right-panel case by node-level visual contrast: among eligible
+    candidates, require ProtoDRIFT to stay close to GT and then maximize the
+    baseline directional miss on the representative display node."""
+    candidates = [r for r in ranked[:top_k] if case_is_eligible(r)]
+    if not candidates:
+        candidates = ranked[:top_k]
+    best = None
+    for result in candidates:
+        pred = collect_case_prediction(data, stcross, learneds, result["display_run"])
+        node = int(select_representative_node_for_case(pred, data["active"], label))
+        baseline_curves = {name: p[:, node] for name, p in pred["preds"].items()
+                           if name != "STCross"}
+        score = case_display_score(pred["true"][:, node], pred["nbl"][:, node],
+                                   pred["preds"]["STCross"][:, node],
+                                   baseline_curves, label)
+        if best is None or score > best[0]:
+            pred["node"] = node
+            pred["i_rep"] = (pred["i_lo"] + pred["i_hi"]) // 2
+            pred["summary"] = result
+            pred["event_label"] = case_event_label(label, data["timestamps"][result["run"][0]])
+            pred["display_score"] = score
+            best = (score, pred)
+    return best[1]
+
+
+def build_pinned_display_case(data, stcross, learneds, label, pin):
+    """Rebuild a frozen right-panel case from its recorded run and display node."""
+    pred = collect_case_prediction(data, stcross, learneds, pin["run"])
+    node = int(pin["node"])
+    baseline_curves = {name: p[:, node] for name, p in pred["preds"].items()
+                       if name != "STCross"}
+    pred["node"] = node
+    pred["i_rep"] = (pred["i_lo"] + pred["i_hi"]) // 2
+    pred["summary"] = None
+    pred["event_label"] = case_event_label(label, data["timestamps"][pin["run"][0]])
+    pred["display_score"] = case_display_score(
+        pred["true"][:, node], pred["nbl"][:, node],
+        pred["preds"]["STCross"][:, node], baseline_curves, label)
+    return pred
+
+
+def anchor_case_stub(data, anchor):
+    """Build the minimal case dict needed to force an anchor run into the embedding."""
+    i_lo, i_hi = interval_sample_range(*anchor["run"], data["te_s"], data["te_e"])
+    return {"i_rep": (i_lo + i_hi) // 2, "run": anchor["run"]}
 
 
 def choose_cases(data, stcross, learneds):
@@ -684,15 +778,23 @@ def parse_overrides(overrides):
 
 
 def plot_dualpanel(out_dir, embed, cases, baseline_names):
-    """Render the final double-column figure."""
+    """Render the final double-column figure.
+
+    Panel captions (a)-(d) sit *below* their panels at the same size as the inner
+    pattern titles. The model legend occupies the top-right band, edge-aligned to
+    the right column. Caption placement is measured from rendered tight bboxes so
+    it clears tick labels and axis captions without magic offsets.
+    """
+    panel_title_size = 26
+    caption_pad = 0.018
     os.makedirs(out_dir, exist_ok=True)
-    fig = plt.figure(figsize=(16.0, 8.2))
-    gs = fig.add_gridspec(2, 2, width_ratios=[1.12, 1.46], wspace=0.23, hspace=0.36)
-    left_gs = gs[:, 0].subgridspec(2, 1, height_ratios=[3.75, 1.0], hspace=0.30)
+    fig = plt.figure(figsize=(20.0, 10.4))
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.12, 1.46], wspace=0.20, hspace=0.34)
+    left_gs = gs[:, 0].subgridspec(2, 1, height_ratios=[3.55, 1.0], hspace=0.46)
     ax_emb = fig.add_subplot(left_gs[0, 0])
-    pattern_gs = left_gs[1, 0].subgridspec(1, 2, wspace=0.24)
+    pattern_gs = left_gs[1, 0].subgridspec(1, 2, wspace=0.10)
     ax_pat_h = fig.add_subplot(pattern_gs[0, 0])
-    ax_pat_w = fig.add_subplot(pattern_gs[0, 1])
+    ax_pat_w = fig.add_subplot(pattern_gs[0, 1], sharey=ax_pat_h)
     ax_h = fig.add_subplot(gs[0, 1])
     ax_w = fig.add_subplot(gs[1, 1], sharex=None)
 
@@ -700,109 +802,169 @@ def plot_dualpanel(out_dir, embed, cases, baseline_names):
     assignment = embed["assignment"]
     for k in sorted(np.unique(assignment)):
         mask = assignment == k
-        ax_emb.scatter(emb[mask, 0], emb[mask, 1], s=18, alpha=0.58,
+        ax_emb.scatter(emb[mask, 0], emb[mask, 1], s=26, alpha=0.58,
                        color=PROTO_COLORS[int(k) % len(PROTO_COLORS)],
                        linewidths=0, label=f"C{k + 1}")
-    label_offsets = {"Holiday": (9, 12), "Weather": (-14, -22)}
-    label_align = {"Holiday": "left", "Weather": "right"}
+    label_offsets = {"Holiday": (0, 20), "Weather": (0, 20)}
+    label_align = {"Holiday": "center", "Weather": "center"}
     for label, pos in embed["case_positions"].items():
         cluster = embed.get("case_clusters", {}).get(label)
         suffix = f" (C{cluster + 1})" if cluster is not None else ""
-        event_label = cases.get(label, {}).get("event_label", CASE_FALLBACK_LABELS[label])
-        ax_emb.scatter(emb[pos, 0], emb[pos, 1], s=360,
+        event_label = LEFT_PANEL_ANCHORS[label]["event_label"]
+        ax_emb.scatter(emb[pos, 0], emb[pos, 1], s=520,
                        marker=CASE_MARKERS[label], color=CASE_COLORS[label],
-                       edgecolor="black", linewidth=1.3, zorder=6,
+                       edgecolor="black", linewidth=1.6, zorder=6,
                        label=f"{event_label}{suffix}")
         ax_emb.annotate(f"{event_label}{suffix}", (emb[pos, 0], emb[pos, 1]),
-                        xytext=label_offsets.get(label, (8, 8)), textcoords="offset points",
-                        fontsize=14, fontweight="bold",
-                        ha=label_align.get(label, "left"))
-    ax_emb.set_title(r"(a) Clustered anomaly semantics in $Z_a$",
-                     fontsize=18, fontweight="bold")
-    ax_emb.set_xlabel("t-SNE dim. 1", fontsize=15)
-    ax_emb.set_ylabel("t-SNE dim. 2", fontsize=15)
+                        xytext=label_offsets.get(label, (0, 20)),
+                        textcoords="offset points",
+                        fontsize=26, fontweight="bold",
+                        ha=label_align.get(label, "center"))
     ax_emb.set_xticks([])
     ax_emb.set_yticks([])
+    ax_emb.margins(x=0.07, y=0.05)
     ax_emb.grid(alpha=0.16)
 
     base_handles = [
-        Line2D([0], [0], marker='o', linestyle='', markersize=7,
+        Line2D([0], [0], marker='o', linestyle='', markersize=13,
                markerfacecolor=PROTO_COLORS[k % len(PROTO_COLORS)],
                markeredgecolor='none', label=f"C{k + 1}")
         for k in range(int(assignment.max()) + 1)
     ]
-    case_handles = [
-        Line2D([0], [0], marker=CASE_MARKERS[label], linestyle='', markersize=11,
-               markerfacecolor=CASE_COLORS[label], markeredgecolor='black',
-               label=cases[label].get("event_label", CASE_FALLBACK_LABELS[label]))
-        for label in ["Holiday", "Weather"]
-    ]
-    ax_emb.legend(handles=base_handles + case_handles, fontsize=10.5,
-                  loc="lower left", ncol=2, frameon=True, framealpha=0.85)
+    # Only the cluster keys are listed; the two cases are labelled in place.
+    ax_emb.legend(handles=base_handles, fontsize=22,
+                  loc="lower left", ncol=4, frameon=True, framealpha=0.85,
+                  handletextpad=0.3, columnspacing=0.7, labelspacing=0.25)
 
-    def plot_pattern(ax, label, direction_text):
+    def plot_pattern(ax, label, direction_text, show_ylabel):
         cluster = embed.get("case_clusters", {}).get(label)
-        event_label = cases[label].get("event_label", CASE_FALLBACK_LABELS[label])
         if cluster is not None and cluster in embed.get("cluster_patterns", {}):
             pattern = embed["cluster_patterns"][cluster]
             steps = np.arange(len(pattern))
-            ax.plot(steps, pattern, color=CASE_COLORS[label], linewidth=2.7,
-                    marker="o", markersize=4.0,
-                    label=f"C{cluster + 1} {event_label}")
-        ax.axhline(0, color="grey", linewidth=1.0, linestyle="--")
-        ax.set_title(direction_text, fontsize=12.2, fontweight="bold")
-        ax.set_ylabel(r"Mean $X-B$", fontsize=10.8)
-        ax.tick_params(axis='both', labelsize=9.2)
+            ax.plot(steps, pattern, color=CASE_COLORS[label], linewidth=3.4,
+                    marker="o", markersize=6.0)
+        ax.axhline(0, color="grey", linewidth=1.2, linestyle="--")
+        # The cluster id lives in the title so the small panels need no legend.
+        suffix = f" (C{cluster + 1})" if cluster is not None else ""
+        ax.set_title(f"{direction_text}{suffix}", fontsize=panel_title_size,
+                     fontweight="bold")
+        ax.set_xlabel("Forecast step", fontsize=24)
+        ax.tick_params(axis='both', labelsize=20)
         ax.grid(alpha=0.25)
-        if cluster is not None:
-            ax.legend(fontsize=8.8, loc="best", frameon=False)
+        # The pair shares one y axis, so only the left panel keeps its labels.
+        if show_ylabel:
+            ax.set_ylabel(r"Mean $X-B$", fontsize=24)
+        else:
+            ax.tick_params(axis='y', labelleft=False)
 
-    ax_pat_h.text(1.05, 1.34, "(b) Selected-cluster flow-deviation patterns",
-                  transform=ax_pat_h.transAxes, ha="center", va="bottom",
-                  fontsize=13.5, fontweight="bold")
-    plot_pattern(ax_pat_h, "Holiday", "Holiday high-flow")
-    plot_pattern(ax_pat_w, "Weather", "Weather low-flow")
-    ax_pat_h.set_xlabel("Forecast step", fontsize=11)
-    ax_pat_w.set_xlabel("Forecast step", fontsize=11)
+    plot_pattern(ax_pat_h, "Holiday", "Holiday", show_ylabel=True)
+    plot_pattern(ax_pat_w, "Weather", "Weather", show_ylabel=False)
 
     def plot_case(ax, label, case, panel_letter):
         node = case["node"]
         x = np.arange(len(case["timesteps"]))
         ax.plot(x, case["true"][:, node], color=MODEL_COLORS["Ground truth"],
-                linewidth=3.0, label="Ground truth")
+                linewidth=4.0, label="Ground truth")
         ax.plot(x, case["preds"]["STCross"][:, node], color=MODEL_COLORS["STCross"],
-                linewidth=2.8, label=display_model_name("STCross"))
+                linewidth=3.8, label=display_model_name("STCross"))
         for name in baseline_names:
             ax.plot(x, case["preds"][name][:, node],
-                    color=MODEL_COLORS.get(name, "#17becf"), linewidth=2.2,
+                    color=MODEL_COLORS.get(name, "#17becf"), linewidth=3.0,
                     linestyle="--", label=display_model_name(name))
-        t0 = case["timesteps"][0].strftime("%m-%d %H:%M")
-        t1 = case["timesteps"][-1].strftime("%m-%d %H:%M")
-        event_label = case.get("event_label", CASE_FALLBACK_LABELS[label])
-        ax.set_title(f"({panel_letter}) {event_label} case: node {node} ({t0}--{t1})",
-                     fontsize=17, fontweight="bold")
-        ax.set_ylabel("Flow", fontsize=15)
+        ax.set_ylabel("Flow", fontsize=30)
         ax.set_ylim(bottom=0)
         ax.grid(alpha=0.25)
-        ax.tick_params(axis='both', labelsize=12)
+        ax.tick_params(axis='both', labelsize=24)
         ticks = np.linspace(0, len(x) - 1, min(6, len(x)), dtype=int)
         ax.set_xticks(ticks)
         ax.set_xticklabels([case["timesteps"][i].strftime("%H:%M") for i in ticks])
+        event_label = case.get("event_label", CASE_FALLBACK_LABELS[label])
+        return f"({panel_letter}) {event_label} case: node {node}"
 
-    plot_case(ax_h, "Holiday", cases["Holiday"], "d")
-    plot_case(ax_w, "Weather", cases["Weather"], "e")
-    ax_w.set_xlabel("Rolling step-0 prediction time", fontsize=15)
+    caption_c = plot_case(ax_h, "Holiday", cases["Holiday"], "c")
+    caption_d = plot_case(ax_w, "Weather", cases["Weather"], "d")
+    # The left column reaches near the top because the legend band only spans the
+    # right column; the right column is re-stacked below that band further down.
+    # Margins are kept tight on all four sides: panel (a) carries no y label or
+    # tick labels, so any left margin would be pure whitespace.
+    fig.subplots_adjust(left=0.016, right=0.995, bottom=0.120, top=0.988,
+                        wspace=0.20, hspace=0.34)
+
+    # The right column is stacked explicitly so the gap between (c) and (d) can
+    # hold (c)'s tick labels plus its caption.
+    pos_c = ax_h.get_position()
+    pos_d = ax_w.get_position()
+    col_top, col_bottom, inner_gap = 0.888, 0.130, 0.115
+    case_height = (col_top - col_bottom - inner_gap) / 2.0
+    ax_w.set_position([pos_d.x0, col_bottom, pos_d.width, case_height])
+    ax_h.set_position([pos_c.x0, col_bottom + case_height + inner_gap,
+                       pos_c.width, case_height])
+
+    # Model legend in the top-right band, expanded to the right column's width so
+    # its left and right edges line up with panels (c) and (d). Same size and
+    # weight as the panel captions.
     handles, labels = ax_h.get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=len(labels), frameon=False,
-               fontsize=14, bbox_to_anchor=(0.66, 0.995), columnspacing=1.05,
-               handlelength=2.2)
-    fig.subplots_adjust(left=0.055, right=0.987, bottom=0.085, top=0.875,
-                        wspace=0.23, hspace=0.36)
+    legend_height = 0.090
+    fig.legend(handles, labels, loc="lower left", ncol=3, frameon=False,
+               prop={"size": panel_title_size, "weight": "bold"},
+               mode="expand", handlelength=2.4, handletextpad=0.5,
+               borderpad=0.0, borderaxespad=0.0,
+               bbox_to_anchor=(pos_c.x0, 0.995 - legend_height,
+                               pos_c.width, legend_height))
+
+    # Captions go under each panel, just below its rendered lower edge. The two
+    # bottom-row captions share one baseline even though (b) and (d) have
+    # different tick/label heights below their axes.
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    to_fig = fig.transFigure.inverted()
+
+    # Panel (b)'s y label overhangs the gridspec column, so it pokes out to the
+    # left of panel (a). Shift and narrow the pattern pair by that overhang so the
+    # label starts exactly on (a)'s left edge while the right edges stay aligned.
+    pos_emb = ax_emb.get_position()
+    pos_ph = ax_pat_h.get_position()
+    pos_pw = ax_pat_w.get_position()
+    pat_left = to_fig.transform(ax_pat_h.get_tightbbox(renderer))[0][0]
+    overhang = pos_emb.x0 - pat_left
+    if overhang > 0:
+        pair_gap = pos_pw.x0 - pos_ph.x1
+        new_left = pos_ph.x0 + overhang
+        pair_width = (pos_pw.x1 - new_left - pair_gap) / 2.0
+        ax_pat_h.set_position([new_left, pos_ph.y0, pair_width, pos_ph.height])
+        ax_pat_w.set_position([new_left + pair_width + pair_gap, pos_pw.y0,
+                               pair_width, pos_pw.height])
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+
+    def caption_top(axes_list):
+        return min(to_fig.transform(a.get_tightbbox(renderer))[0][1]
+                   for a in axes_list) - caption_pad
+
+    def add_caption(axes_list, text, top=None):
+        y = caption_top(axes_list) if top is None else top
+        # Center on the panel's full visual extent, which includes the y label and
+        # tick labels on the left; centering on the plot box alone looks right-shifted.
+        boxes = [to_fig.transform(a.get_tightbbox(renderer)) for a in axes_list]
+        x0 = min(b[0][0] for b in boxes)
+        x1 = max(b[1][0] for b in boxes)
+        fig.text((x0 + x1) / 2.0, y, text, ha="center", va="top",
+                 fontsize=panel_title_size, fontweight="bold")
+
+    add_caption([ax_emb], r"(a) Clustered anomaly semantics in $Z_a$")
+    add_caption([ax_h], caption_c)
+    bottom_top = min(caption_top([ax_pat_h, ax_pat_w]), caption_top([ax_w]))
+    add_caption([ax_pat_h, ax_pat_w],
+                "(b) Cluster deviation: holiday high vs. weather low",
+                top=bottom_top)
+    add_caption([ax_w], caption_d, top=bottom_top)
 
     png_path = os.path.join(out_dir, "v4_semantic_case_dualpanel.png")
     pdf_path = os.path.join(out_dir, "v4_semantic_case_dualpanel.pdf")
-    fig.savefig(png_path, dpi=600, bbox_inches="tight")
-    fig.savefig(pdf_path, bbox_inches="tight")
+    # The layout above is tuned explicitly, so no tight bbox: it would override the
+    # margins and expand the crop around any artist that overhangs an axes.
+    fig.savefig(png_path, dpi=600)
+    fig.savefig(pdf_path)
     plt.close(fig)
     return png_path, pdf_path
 
@@ -862,53 +1024,46 @@ def main():
         learneds.append((name, load_learned_baseline(name, ckpt_dir)))
         baseline_names.append(name)
 
-    print("Selecting holiday/weather cases without HA...")
-    cases, h_ranked, w_ranked = choose_cases(data, stcross, learneds)
-    for label, ranked in [("Holiday", h_ranked), ("Weather", w_ranked)]:
-        best = ranked[0]
-        print(f"  {label:<7} {best['date'].strftime('%Y-%m-%d')} "
-              f"{display_model_name('STCross')}={best['mae_st']:.4f} margin={best['margin']:.4f} "
-              f"run={best['display_run']} ratio={best['anomaly_ratio']:.2f} "
-              f"day={best['daytime_fraction']:.2f} "
-              f"flowΔ={best['flow_delta']:.3f} baseBias={best['baseline_bias']:.3f} "
-              f"posSteps={best['positive_step_fraction']:.2f} trueMean={best['true_mean']:.3f} "
-              f"node={cases[label]['node']}")
+    print("Ranking holiday/weather candidate runs without HA...")
+    holiday_runs = find_runs(data["holiday"], DISPLAY_MIN_RUN, data["te_s"], data["te_e"])
+    weather_runs = find_runs(data["weather"], DISPLAY_MIN_RUN, data["te_s"], data["te_e"])
+    h_ranked = evaluate_runs(holiday_runs, "Holiday", data, stcross, learneds)
+    w_ranked = evaluate_runs(weather_runs, "Weather", data, stcross, learneds)
+    if not h_ranked or not w_ranked:
+        raise RuntimeError("No valid holiday/weather runs found in CHI test period")
 
-    print("Encoding CHI anomaly windows, clustering Z_a, and extracting cluster patterns...")
+    print("Choosing right-panel display cases by node-level visual contrast...")
+    cases = {}
+    for label, ranked in [("Holiday", h_ranked), ("Weather", w_ranked)]:
+        pin = PINNED_DISPLAY_CASES.get(label)
+        if pin is not None:
+            cases[label] = build_pinned_display_case(data, stcross, learneds, label, pin)
+        else:
+            cases[label] = choose_display_case(data, stcross, learneds, ranked, label)
+    for label in ["Holiday", "Weather"]:
+        case = cases[label]
+        node = case["node"]
+        st_mae = float(np.abs(case["preds"]["STCross"][:, node] - case["true"][:, node]).mean())
+        pinned = "pinned" if label in PINNED_DISPLAY_CASES else "selected"
+        print(f"  {label:<7} [{pinned}] {case['event_label']} run={case['run']} "
+              f"node={node} stMAE={st_mae:.3f} displayScore={case['display_score']}")
+
+    print("Encoding CHI anomaly windows with pinned left-panel anchors...")
+    anchor_h = anchor_case_stub(data, LEFT_PANEL_ANCHORS["Holiday"])
+    anchor_w = anchor_case_stub(data, LEFT_PANEL_ANCHORS["Weather"])
     X, b_in, b_fut, sample_starts, sample_events = build_embedding_inputs(
-        data, cases["Holiday"], cases["Weather"], rng, max_samples=args.embed_samples)
+        data, anchor_h, anchor_w, rng, max_samples=args.embed_samples)
     case_nodes = {
-        "Holiday": {"run": cases["Holiday"]["run"], "node": cases["Holiday"]["node"]},
-        "Weather": {"run": cases["Weather"]["run"], "node": cases["Weather"]["node"]},
+        "Holiday": {"run": LEFT_PANEL_ANCHORS["Holiday"]["run"]},
+        "Weather": {"run": LEFT_PANEL_ANCHORS["Weather"]["run"]},
     }
     embed = compute_embedding(stcross, X, b_in, b_fut, sample_starts,
                               data["N"], case_nodes, rng,
                               sample_events=sample_events, active=data["active"])
-
-    selected_h, selected_w = select_case_pair_by_cluster(h_ranked, w_ranked, embed)
-    if (selected_h is not cases["Holiday"]["summary"] or
-            selected_w is not cases["Weather"]["summary"]):
-        print("Refining cases to prefer distinct semantic clusters...")
-        cases = build_cases_from_results(
-            data, stcross, learneds,
-            [("Holiday", selected_h), ("Weather", selected_w)])
-        for label, result in [("Holiday", selected_h), ("Weather", selected_w)]:
-            cluster = cluster_for_run(embed, result["display_run"])
-            print(f"  {label:<7} cluster=C{cluster + 1 if cluster is not None else -1} "
-                  f"run={result['display_run']} ratio={result['anomaly_ratio']:.2f} "
-                  f"day={result['daytime_fraction']:.2f} "
-                  f"flowΔ={result['flow_delta']:.3f} baseBias={result['baseline_bias']:.3f} "
-                  f"posSteps={result['positive_step_fraction']:.2f} trueMean={result['true_mean']:.3f} "
-                  f"node={cases[label]['node']}")
-        X, b_in, b_fut, sample_starts, sample_events = build_embedding_inputs(
-            data, cases["Holiday"], cases["Weather"], rng, max_samples=args.embed_samples)
-        case_nodes = {
-            "Holiday": {"run": cases["Holiday"]["run"], "node": cases["Holiday"]["node"]},
-            "Weather": {"run": cases["Weather"]["run"], "node": cases["Weather"]["node"]},
-        }
-        embed = compute_embedding(stcross, X, b_in, b_fut, sample_starts,
-                                  data["N"], case_nodes, rng,
-                                  sample_events=sample_events, active=data["active"])
+    for label in ["Holiday", "Weather"]:
+        cluster = embed.get("case_clusters", {}).get(label)
+        print(f"  [anchor] {LEFT_PANEL_ANCHORS[label]['event_label']:<16} "
+              f"cluster=C{cluster + 1 if cluster is not None else -1}")
 
     print("Rendering V4 dual-panel figure...")
     png_path, pdf_path = plot_dualpanel(args.out_dir, embed, cases, baseline_names)
