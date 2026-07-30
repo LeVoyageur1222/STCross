@@ -1,0 +1,81 @@
+\clearpage
+\setcounter{page}{1}
+\renewcommand\thesection{\Alph{section}}
+\setcounter{section}{0}
+% The AAAI style sets secnumdepth to 0 (unnumbered body sections). Re-enable
+% numbering here so the appendix is lettered as A, A.1, A.2, ... as required.
+\setcounter{secnumdepth}{2}
+\setcounter{footnote}{0}
+\setcounter{table}{0}
+\setcounter{figure}{0}
+\section{Appendix}
+
+This appendix provides additional details of the experimental setup to support reproducibility.
+
+\subsection{Datasets}
+
+We use hourly bike-sharing flow from New York City (NYC) and Chicago (CHI), sourced from the STContext benchmark~\cite{stcontext}. Both cities span 2014-10-01 to 2017-09-29 at a 60-minute granularity ($T=26{,}280$ steps); NYC contains 820 spatial nodes and CHI contains 585. Each city is split chronologically into training (15{,}336 steps, 2014-10 to 2016-06), validation (5{,}160 steps, 2016-07 to 2017-01), and test (5{,}784 steps, 2017-02 to 2017-09). Sliding-window samples use $H=12$ past steps to predict $P=12$ future steps, yielding 5{,}761 test samples per city. Table~\ref{tab:appendix_data} summarizes the key statistics.
+
+\begin{table}[!htbp]
+\centering
+\setlength{\tabcolsep}{6pt}
+\renewcommand\arraystretch{1.05}
+\begin{tabular}{c|cccc}
+\hline
+City & \#Nodes & Time Span & \#Test & \#Anomaly \\ \hline
+NYC & 820 & 2014.10--2017.09 & 5{,}761 & 507 \\
+CHI & 585 & 2014.10--2017.09 & 5{,}761 & 398 \\
+\hline
+\end{tabular}
+\caption{Dataset statistics. \#Test: sliding-window test samples; \#Anomaly: anomaly-subset size.}
+\label{tab:appendix_data}
+\end{table}
+
+\noindent\textbf{Anomaly annotation.} Anomalous time steps are annotated by two external sources combined with a logical OR. The \emph{holiday mask} marks U.S. federal holidays plus city/state-specific holidays and their weekend-observed dates; the \emph{extreme-weather mask} marks steps affected by heavy rain, heavy snow, storms, or low visibility, derived from historical weather records. A sliding-window sample belongs to the anomaly subset when at least half of its prediction window is anomalous (\texttt{anomaly\_min\_ratio}$=0.5$). Both masks are mechanically generated from public calendars and weather records without manual selection.
+
+\subsection{Baselines}
+
+We compare ProtoDRIFT with 11 methods in three families. All baselines adopt channel-independent modeling, enabling zero-shot transfer between cities of different sizes.
+
+\noindent\textbf{Conventional forecasting.}
+\begin{itemize}
+    \item \textbf{LSTM}~\cite{lstm}: captures temporal dependencies via gated memory cells.
+    \item \textbf{DLinear}~\cite{dlinear}: decomposes the series into trend and seasonal components and forecasts each with a linear layer.
+    \item \textbf{PatchTST}~\cite{PatchTST}: segments the series into patches and models patch-level dependencies with a channel-independent Transformer.
+    \item \textbf{TimesNet}~\cite{timesnet}: reshapes the 1D series into 2D tensors along multiple periods and applies inception-style convolutions to capture intra- and inter-period variations.
+    \item \textbf{ModernTCN}~\cite{moderntcn}: a modernized convolution backbone with large kernels for long-range temporal modeling.
+\end{itemize}
+
+\noindent\textbf{Distributionally robust / transferable forecasting.}
+\begin{itemize}
+    \item \textbf{TimeAlign}~\cite{timealign}: aligns the latent distributions of a prediction branch and an auxiliary reconstruction branch at global and local scales to bridge past and future distributions.
+    \item \textbf{ProtoTS}~\cite{protots}: learns hierarchical temporal prototypes, each representing an interpretable typical pattern, for explainable forecasting.
+\end{itemize}
+
+\noindent\textbf{Anomaly / extreme-event-aware forecasting.}
+\begin{itemize}
+    \item \textbf{EVL}~\cite{evl}: combines an extreme-value-theory-inspired loss with a memory network storing historical extreme patterns.
+    \item \textbf{EALGAP}~\cite{ealgap}: decouples flow into a global trend modeled by attention over a fitted extreme-value distribution, and a local extreme intensity modeled by a GRU over same-slot z-scores.
+    \item \textbf{DAN}~\cite{dan}: decomposes the forecast into far and near polar representations trained with a distance-weighted, imbalance-aware objective.
+    \item \textbf{ST-SSDL}~\cite{stssdl}: anchors inputs to their historical mean and structures the resulting deviation with learnable prototypes plus contrastive and deviation losses.
+\end{itemize}
+
+All methods share the same data splits, normalization, and evaluation scripts. Per-model learning rates follow original recommendations where available.
+
+\subsection{Experimental Implementations}
+
+\noindent\textbf{Normal reference.} The normal reference $\mathbf{B}$ is a non-learnable lookup: for each node, the mean normalized flow over all non-anomalous training steps sharing the same (weekday, hour) slot, producing a $7\times24$ table per node. When a slot has fewer than five normal samples, the estimate falls back first to the same-hour mean, then to the global normal mean. At inference the target city builds this reference from its own statistics; no source-city reference is transferred.
+
+\noindent\textbf{Architecture.} ProtoDRIFT operates on the per-node deviation $\boldsymbol{\Delta}=\mathbf{X}-\mathbf{B}$ and its window-normalized form $\widetilde{\boldsymbol{\Delta}}$.
+\begin{itemize}
+    \item \textbf{Anomaly encoder (AEnc).} Two-layer variational LSTM, hidden/latent size 64, dropout 0.1. Encodes $\widetilde{\boldsymbol{\Delta}}$ into $\mathbf{z}_a$; regularized by a KL capacity term $\mathcal{L}_{\mathrm{cap}}$.
+    \item \textbf{Prototype bank.} $K{=}8$ prototypes, each a latent embedding paired with a future deviation pattern $\in\mathbb{R}^{P}$. Soft retrieval via softmax over negative squared distances; a fixed-margin (0.5) triplet regularizer $\mathcal{L}_{\mathrm{proto}}$.
+    \item \textbf{City-conditioned branch.} Two-layer city LSTM (CEnc, same dimensions) encodes the unnormalized $\boldsymbol{\Delta}$ into $\mathbf{z}_s$; a city adjustment decoder (CAD) maps it to the residual. A variational MI estimator (hidden 32, clipped to $[-5,5]$) suppresses dependence between $\mathbf{z}_a$ and $\mathbf{z}_s$.
+    \item \textbf{Prediction.} $\widehat{\mathbf{Y}}=\mathbf{B}_{\mathrm{fut}}+\widehat{\boldsymbol{\Delta}}_{\mathrm{type}}+\widehat{\boldsymbol{\Delta}}_{\mathrm{adj}}$.
+\end{itemize}
+
+\noindent\textbf{Training objective.} $\mathcal{L}=\mathcal{L}_{\mathrm{pred}}+\alpha\mathcal{L}_{\mathrm{cap}}+\gamma\mathcal{L}_{\mathrm{proto}}+\mathcal{L}_{\mathrm{dec}}$, where $\mathcal{L}_{\mathrm{dec}}$ is the sum of a mutual-information upper bound and an $\ell_2$ penalty on the adjustment magnitude; their internal weights are fixed implementation settings. Default design variables: $\alpha{=}0.3$, $K{=}8$, $\gamma{=}0.1$. For the first three warmup epochs only $\mathcal{L}_{\mathrm{pred}}$ is active.
+
+\noindent\textbf{Training protocol.} Per-node z-score normalization fitted on each city's training split, clipped to $[-10,10]$. Adam optimizer ($\text{lr}=10^{-3}$, weight decay $10^{-4}$), cosine annealing, gradient-norm clipping at 5.0, early stopping with patience 10, batch size 64, seed 42.
+
+\noindent\textbf{Evaluation.} Each model is trained once on the source city and directly evaluated on the target city without fine-tuning. We report MAE, RMSE, and $R^2$ on both the full and anomaly subsets. Repeated runs of the identical configuration differ by roughly $\pm0.015$ MAE / $\pm0.010$ $R^2$ on the NYC$\rightarrow$CHI anomaly subset due to GPU non-determinism.

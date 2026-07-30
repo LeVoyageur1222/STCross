@@ -1,0 +1,45 @@
+\section{Introduction}
+
+% P1 区域内的人口流动展现的趋势与周期模式和区域间的人口流动交互能够很好地体现区域发展水平和不同区域的动态联系。基于人口流动的城市区域表示学习方法在近年来得到了飞速发展，推动通用表征用于犯罪预测、区域房价预测和人口密度推断等不同下游任务\cite{MVURE, MGFN, HREP, ReCP}。
+
+% P2 以人口流动数据的组织方式，现有的城市区域表示学习研究可以分为以下两个主要类别。Flow-based methods \cite{UrbanGPT, UniST}将区域间的人口流动基于网格进行聚合，组织为inflow和outflow的形式，之后通过对序列的掩码与重构学习flow中蕴含的区域隐藏信息。Graph-based方法则从区域之间的OD流量出发，构建固定结构的人口流量分布图（Graph），之后通过自监督学习的方式对该人口流量分布图进行重构，从而从图上捕获区域间的交互特征\cite{MVURE}。此外，有些工作在重构过程中引入POI等区域功能属性信息\cite{HREP, ReCP}，使得模型能够学习富含结构与功能属性语义的区域表征。
+
+% P3 然而，城市数据源的不均衡性显示了可迁移性区域表征的迫切需要。传统的Graph-based模型在固定的图结构上进行训练，天然不具备可迁移性。如图Fig \ref{fig:intro} (a)所示，不同城市间乃至相同城市内出于不同的划分目的，往往得到节点数量、邻接关系等均各异的图结构。基于这样的图结构搭建的model将这种显式的图结构硬编码进graph encoder中，阻碍了不同城市间的迁移学习。针对这种限制，一类Transfer-Learning-based的方法提出通过在源城市上学习人口流量的Pattern Bank，之后通过在目标城市上将特征通过注意力\cite{TPB}或构建相似性邻接矩阵\cite{TransGTR}与Pattern Bank进行对齐，从而实现区域表征的迁移。但是这种迁移本质还是基于区域流量特征进行对齐的，且仅在区域流量预测这一下游任务上得到验证，难以说明其学习了可迁移的区域空间结构信息与功能语义的相似信息。可迁移的图结构在区域迁移表示学习上仍存在巨大的挑战。
+
+% P4 现有许多研究表明，Graph上节点的特征仅与其邻近的节点有关\cite{DeepWalk, GAT, GCN}，这反映到城市区域上可以阐释为一个城市区域，仅受其地理临近区域、功能相似区域和人口流动交互密切区域的影响。基于此motivation，我们提出如图Fig \ref{fig:intro} (b)所示的方法框架。为了构建跨区域一致性的图结构，我们首先设计了multi-view subgraph sampler。该sampler基于区域之间的地理距离、区域功能属性的相似程度和人口交流的频次信息，对每个区域节点采样混合子图，从而捕获节点的空间结构信息与属性语义信息。此外，为了模型能够学习可迁移的空间结构知识和属性语义知识，我们在模型中加入multi-view pattern-bank模块。该模块将区域的地理拓扑关系、区域属性和人口交互编码为固定的模式，通过在源城市的update与query不断更新城市异质图结构知识，使得模型能够在目标城市上编码得到富含空间结构与区域属性等复杂语义的region representation。
+
+% P4 本篇论文的贡献可以总结为如下三点
+% 1. Insight。针对区域可迁移表示学习这一科学问题，我们提炼可迁移图结构挑战。并据此提出混合子图采样策略。通过地理距离、区域功能属性和人口流动关系三种不同混合策略，我们的模型可以学习区域节点间在空间结构图与属性语义关系图上的信息传递方式，为区域表示学习提供了一种创新的视角；
+% 2. Framework。 我们提出MAP-STAR，a Multi-view Pattern-bank Adaptation with heterogeneous subgraph Sampling for Transferable Area Representation learning。通过采样混合子图并将区域多视角信息编码进入pattern bank中，模型实现对区域空间结构依赖知识和属性语义知识的学习与迁移；
+% 3. Empirical Result. 通过大量的实验，我们验证了MAP-STAR在学习空间结构与属性语义知识的充分性与可迁移性，并在多个下游任务实验上达到了SOTA的效果。
+
+Human mobility captures the fine-grained temporal rhythms within individual districts as well as the dynamic interaction patterns that unfold across districts over time. By embedding these signals into a latent space, mobility-based regional representations provide a rich substrate for a wide spectrum of urban-computing applications including crime prediction, house-price estimation, etc\cite{MVURE, MGFN, HREP, ReCP}. Consequently, learning transferable and semantically meaningful representations from human-mobility data has emerged as a central research problem in region representation learning, with the potential to bridge data-rich and data-scarce cities and to support robust knowledge transfer in heterogeneous urban environments.
+
+\begin{figure}[t]
+   \centering
+    \includegraphics[width=0.46\textwidth]{fig/intro_v2.png} % Reduce the figure size so that it is slightly narrower than the column.
+    \caption{Illustration of Transferable Region Representation Learning. (a) Existing approaches encode regional embeddings on a fixed graph, which prevents them from generalizing to other cities. (b) MAP-STAR samples consistent subgraphs across cities and builds a shared pattern repository during pre-training, capturing common spatial, attribute, and mobility patterns to enable cross-city transfer.}
+    \label{fig:intro}
+\end{figure}
+
+Existing methods can be broadly categorized by the manner in which they organize human mobility data. Flow-based approaches \cite{UrbanGPT, UniST} aggregate origin–destination (OD) flows onto a grid, treat each cell’s inflow and outflow as multivariate time series, and employ masked-reconstruction objectives to uncover latent regional characteristics. Graph-based approaches, in contrast, build a static OD-flow graph whose nodes represent districts and whose edges encode OD intensities; self-supervised graph neural networks then reconstruct this graph to capture inter-district interaction patterns \cite{MVURE}. Several studies also incorporate side information—such as POI similarity, Land-Use of the region—into the reconstruction process, allowing the resulting embeddings to encode not only the spatial structure, but also the functional attributes \cite{HREP, ReCP}.
+
+Although recent progress is impressive, the imbalance of mobility data across cities makes transferable regional representations essential. As illustrated in Figure \ref{fig:intro}(a), traditional graph models are trained on a single, fixed graph; when the city changes—bringing different zoning schemes, node counts, or adjacency patterns—the model no longer adapts, and transfer performance deteriorates. To mitigate this limitation, several transfer-learning techniques first construct a pattern bank from a source-city flow graph, then align target-city features to this bank through attention mechanisms \cite{TPB} or flow-similarity matrices \cite{TransGTR}. However, these approaches remain flow-centric and have been evaluated only on flow-forecasting tasks, leaving open the question of whether they truly capture transferable structures and functional semantics.
+
+Prior studies in graph representation learning demonstrate that a node’s representation depends chiefly on its geographically adjacent, functionally similar, and mobility-connected neighbours \cite{DeepWalk, GAT, GCN}. In the urban setting, a district is therefore shaped by nearby areas, zones with analogous functions, and districts linked by intense population flows. Leveraging this insight, we develop the framework MAP-STAR shown in Figure \ref{fig:intro}(b). First, we design a multi-view subgraph sampler that, for each district, fuses neighbours selected by geographical proximity, POI similarity, and OD-flow intensity, thus producing a heterogeneous subgraph that preserves both spatial structure and attribute semantics. Second, we construct a multi-view pattern bank that stores transferable motifs of topology, function, and mobility interaction. During pre-training on the source city, the bank is iteratively updated and queried, enabling the encoder to yield region embeddings that remain semantically rich and structurally coherent when transferred to the target city.
+
+% Our contributions can be summarized as follows:
+
+% \begin{itemize}
+%     \item  \textbf{Insight.}  We identify transferable graph structure as the key challenge in regional representation transfer learning. We propose heterogeneous subgraph sampling as a principled solution. By unifying geographical, functional and mobility views, the model learns versatile message-passing patterns across multiple relational graphs.
+%     \item \textbf{Framework.} We propose MAP-STAR, a Multi-view Pattern-bank Adaptation with heterogeneous Subgraph sampling for Transferable Area Representation.  MAP-STAR samples mixed subgraphs and encodes multi-view information into a pattern bank, enabling both structural and semantic knowledge to be learned and transferred.
+%     \item \textbf{Empirical results.}  Extensive experiments demonstrate that MAP-STAR captures spatial structure and attribute semantics effectively, transfers them across cities, and achieves state-of-the-art performance on a variety of downstream tasks.
+% \end{itemize}
+
+Our main contributions are threefold:
+
+\begin{itemize}
+    \item \textbf{Conceptual insight.} We pinpoint the lack of transferable graph structure as the core obstacle to transferable region representation learning. To address this challenge, we introduce Heterogeneous Subgraph Sampler, which unifies geographical, functional, and mobility views so that the encoder can learn versatile message-passing patterns over multiple-view graphs.
+    \item \textbf{Methodological framework.} We present MAP-STAR, \textbf{M}ulti-view \textbf{P}attern-bank \textbf{A}daptation with heterogeneous \textbf{S}ubgraph sampling for \textbf{T}ransferable \textbf{A}rea \textbf{R}epresentation. MAP-STAR samples heterogeneous subgraphs and distills their multi-view information into a shared pattern bank, thereby enabling the joint transfer of structural and semantic knowledge.
+    \item \textbf{Empirical validation.} We conduct comprehensive experiments in cross-city senwhich show that MAP-STAR effectively captures spatial structures and attribute semantics, transfers them across cities, and attains state-of-the-art results on diverse downstream tasks.
+\end{itemize}

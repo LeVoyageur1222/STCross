@@ -848,7 +848,8 @@ def plot_dualpanel(out_dir, embed, cases, baseline_names):
         suffix = f" (C{cluster + 1})" if cluster is not None else ""
         ax.set_title(f"{direction_text}{suffix}", fontsize=panel_title_size,
                      fontweight="bold")
-        ax.set_xlabel("Forecast step", fontsize=24)
+        # The curves come from X - b_in, i.e. the input window, not the horizon.
+        ax.set_xlabel("Input step", fontsize=24)
         ax.tick_params(axis='both', labelsize=20)
         ax.grid(alpha=0.25)
         # The pair shares one y axis, so only the left panel keeps its labels.
@@ -959,8 +960,8 @@ def plot_dualpanel(out_dir, embed, cases, baseline_names):
                 top=bottom_top)
     add_caption([ax_w], caption_d, top=bottom_top)
 
-    png_path = os.path.join(out_dir, "v4_semantic_case_dualpanel.png")
-    pdf_path = os.path.join(out_dir, "v4_semantic_case_dualpanel.pdf")
+    png_path = os.path.join(out_dir, "v4_semantic_case_dualpanel_v2.png")
+    pdf_path = os.path.join(out_dir, "v4_semantic_case_dualpanel_v2.pdf")
     # The layout above is tuned explicitly, so no tight bbox: it would override the
     # margins and expand the crop around any artist that overhangs an axes.
     fig.savefig(png_path, dpi=600)
